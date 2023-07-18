@@ -34,6 +34,9 @@ def simulate_clonal_tree(m, n):
 
     mutation_to_clone_mapping = {}
     for node in tree.nodes:
+        if 'mutation' not in tree.nodes[node]:
+            continue
+
         for mutation in tree.nodes[node]['mutation']:
             mutation_to_clone_mapping[mutation] = node
 
@@ -78,7 +81,7 @@ def simulate_usage_matrix(tree, s, n):
 Simulate a mutation read counts from a clonal matrix, usage matrix and 
 a mapping from mutations to clone.
 """
-def simulate_read_counts(clonal_matrix, usage_matrix, mutation_to_clone_mapping, num_mutations, coverage):
+def simulate_read_counts(usage_matrix, clonal_matrix, mutation_to_clone_mapping, num_mutations, coverage):
     F = 0.5 * usage_matrix @ clonal_matrix
     
     variant_count_matrix = np.zeros((usage_matrix.shape[0], num_mutations))
@@ -89,10 +92,30 @@ def simulate_read_counts(clonal_matrix, usage_matrix, mutation_to_clone_mapping,
             f = binom.rvs(
                     total_count_matrix[s, mutation_to_clone_mapping[mutation]],
                     F[s, mutation_to_clone_mapping[mutation]]
-                )
+            )
             variant_count_matrix[s, mutation] = f
 
     return variant_count_matrix, total_count_matrix
+
+def observe_frequency_matrix(variant_count_matrix, total_count_matrix, mutation_to_clone_mapping):
+    clone_to_mutation_mapping = {}
+    for mutation in mutation_to_clone_mapping:
+        clone = mutation_to_clone_mapping[mutation]
+        if clone not in clone_to_mutation_mapping:
+            clone_to_mutation_mapping[clone] = []
+        clone_to_mutation_mapping[clone].append(mutation)
+
+    clone_mut = lambda c: clone_to_mutation_mapping[c] if c in clone_to_mutation_mapping else []
+
+    obs_frequency_matrix = np.zeros((variant_count_matrix.shape[0], len(clone_to_mutation_mapping.keys())))
+    for s in range(obs_frequency_matrix.shape[0]):
+        for clone in range(obs_frequency_matrix.shape[1]):
+            variant_reads = sum([variant_count_matrix[s, m] for m in clone_mut(clone)])
+            total_reads   = sum([total_count_matrix[s, m] for m in clone_mut(clone)])
+            if total_reads > 0:
+                obs_frequency_matrix[s, clone] = variant_reads / total_reads
+
+    return obs_frequency_matrix
 
 def main():
     parser = argparse.ArgumentParser(description='Simulate a clonal matrix, usage matrix and read counts.')
@@ -112,11 +135,20 @@ def main():
             usage_matrix, clonal_matrix, mutation_to_clone_mapping, 
             args.mutations, args.coverage
     )
+
+    f_hat = observe_frequency_matrix(variant_matrix, total_matrix, mutation_to_clone_mapping)
     
     np.savetxt(f'{args.output}_clonal_matrix.txt', clonal_matrix, fmt='%d')
     np.savetxt(f'{args.output}_usage_matrix.txt', usage_matrix, fmt='%.4f')
     np.savetxt(f'{args.output}_variant_matrix.txt', variant_matrix, fmt='%d')
     np.savetxt(f'{args.output}_total_matrix.txt', total_matrix, fmt='%d')
+    np.savetxt(f'{args.output}_obs_frequency_matrix.txt', f_hat, fmt='%.4f')
+
+    nx.write_adjlist(tree, f'{args.output}_tree.txt')
+    
+    df = pd.DataFrame.from_dict(mutation_to_clone_mapping, orient='index').reset_index()
+    df.columns = ['mutation', 'clone']
+    df.to_csv(f'{args.output}_mutation_to_clone_mapping.txt', sep=',', index=False)
 
 if __name__ == "__main__":
     main()
