@@ -97,15 +97,16 @@ def simulate_read_counts(usage_matrix, clonal_matrix, mutation_to_clone_mapping,
 
     return variant_count_matrix, total_count_matrix
 
-def observe_frequency_matrix(variant_count_matrix, total_count_matrix, mutation_to_clone_mapping):
+def observe_frequency_matrix(variant_count_matrix, total_count_matrix, mutation_to_clone_mapping, num_clones):
     clone_to_mutation_mapping = {}
+    for clone in range(num_clones):
+        clone_to_mutation_mapping[clone] = []
+
     for mutation in mutation_to_clone_mapping:
         clone = mutation_to_clone_mapping[mutation]
-        if clone not in clone_to_mutation_mapping:
-            clone_to_mutation_mapping[clone] = []
         clone_to_mutation_mapping[clone].append(mutation)
 
-    clone_mut = lambda c: clone_to_mutation_mapping[c] if c in clone_to_mutation_mapping else []
+    clone_mut = lambda c: clone_to_mutation_mapping[c]
 
     obs_frequency_matrix = np.zeros((variant_count_matrix.shape[0], len(clone_to_mutation_mapping.keys())))
     for s in range(obs_frequency_matrix.shape[0]):
@@ -136,7 +137,7 @@ def main():
             args.mutations, args.coverage
     )
 
-    f_hat = observe_frequency_matrix(variant_matrix, total_matrix, mutation_to_clone_mapping)
+    f_hat = observe_frequency_matrix(variant_matrix, total_matrix, mutation_to_clone_mapping, args.clones)
     
     np.savetxt(f'{args.output}_clonal_matrix.txt', clonal_matrix, fmt='%d')
     np.savetxt(f'{args.output}_usage_matrix.txt', usage_matrix, fmt='%.4f')
