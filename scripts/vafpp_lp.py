@@ -8,126 +8,97 @@ from gurobipy import *
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--matrix', type=str, required=False,
-                        help='CSV file containing the input matrix B.')
+    parser.add_argument('--clonal-matrix', type=str, required=False,
+                        help='Numpy TXT file containing the input matrix B.')
     parser.add_argument('--tree', type=str, required=False,
                         help='Adjacency list describing the input tree.')
-    parser.add_argument('--vector', type=str, required=True,
-                        help='CSV file containing the input vector f.')
+    parser.add_argument('--frequency-matrix', type=str, required=True,
+                        help='Numpy TXT file containing the input frequency matrix F.')
 
     return parser.parse_args()
 
-def construct_matrix_B(G):
-    nodes = list(G.nodes)
-    n = len(nodes)
+"""
+Constructs the clonal matrix from a clonal tree.
+"""
+def construct_clonal_matrix(tree):
+    n = len(tree.nodes)
 
     B = np.zeros((n, n))
     for i in range(n):
         for j in range(n):
-            if nx.has_path(G, nodes[i], nodes[j]):
+            if nx.has_path(tree, i, j):
                 B[j, i] = 1
 
     return B
 
-def vafpp_linear_program(B, f):
-    n = B.shape[0]
+"""
+Given a frequency matrix $F$ and a clonal matrix $B$, this function
+finds a usage matrix $U$ such that  
+        $$\sum_{i=1}^m\lVert F_i - (UB)_i \rVert_1$$
+is minimized, by using linear programming.
+"""
+def one_vafpp_linear_program(B, F):
+    n, m = F.shape[1], F.shape[0]
 
     model = Model("1-VAFPP Primal Linear Program")
 
-    u = model.addVars(n, lb=0, vtype=GRB.CONTINUOUS, name="u")
-    z = model.addVars(n, lb=0, vtype=GRB.CONTINUOUS, name="z")
-
-    model.setObjective(quicksum(-z[i] for i in range(n)), GRB.MAXIMIZE)
+    U = model.addMVar(shape=(m, n), lb=0, vtype=GRB.CONTINUOUS, name="U")
+    Z = model.addMVar(shape=(m, n), lb=0, vtype=GRB.CONTINUOUS, name="Z")
 
     for i in range(n):
-        model.addConstr(z[i] >= f[i] - quicksum(u[j] * B[j, i] for j in range(n)))
-        model.addConstr(z[i] >= quicksum(u[j] * B[j, i] for j in range(n)) - f[i])
-    model.addConstr(quicksum(u[i] for i in range(n)) <= 1)
+        for k in range(m):
+            model.addConstr(Z[k, i] >= F[k, i] - U[k, :] @ B[:, i])
+            model.addConstr(Z[k, i] >= U[k, :] @ B[:, i] - F[k, i])
 
+    for k in range(m):
+        model.addConstr(U[k, :].sum() <= 1)
+
+    model.setObjective(Z.sum(), GRB.MINIMIZE)
     model.optimize()
 
-    if model.status == GRB.OPTIMAL:
-        print('Optimal solution found:')
-        for i in range(n):
-            print('u[{}] = {:.2f}'.format(i, u[i].x))
-        for i in range(n):
-            print('z[{}] = {:.2f}'.format(i, z[i].x))
-    else:
-        print('No optimal solution found. Gurobi status code:', model.status)
+    # print U as a matrix
+    print("U:")
+    for i in range(m):
+        for j in range(n):
+            print(U[i, j].x, end=" ")
+        print()
 
-    u = np.array([u[i].x for i in range(n)])
-    print(u.T @ B)
-    print(f)
-    print(np.sum(np.abs(u.T @ B)))
+    return model.objVal
 
-def solve_dual(tree, f):
-    n = len(tree.nodes)
+"""
+Given a frequency matrix $F$ and a clone tree $T$, this function
+finds the minimizing value of
+        $$\sum_{i=1}^m\lVert F_i - (UB)_i \rVert_1$$
+over all usage matrices.
+"""
+def one_vafpp_dual(tree, F):
+    n, m = F.shape[1], F.shape[0]
 
-    psi = np.zeros(n)
-    gamma = np.zeros(n)
+    psi = np.zeros((m, n))
+    gamma = np.zeros((m, n))
 
     for i in range(n):
-        gamma[i] = max(sum(f[j] for j in tree[i]) - f[i], 0)
+        for k in range(m):
+            gamma[k, i] = max(sum(F[k, j] for j in tree[i]) - F[k, i], 0)
 
     psi = gamma > 0
     obj = np.sum(gamma)
-
-    
-    model = Model("1-VAFPP Read Primal From Dual")
-
-    u = model.addVars(n, lb=0, vtype=GRB.CONTINUOUS, name="u")
-    z = model.addVars(n, lb=0, vtype=GRB.CONTINUOUS, name="z")
-
-    for i in range(n):
-        if psi[i] == 1:
-            model.addConstr(u[i] == 0)
-
-        if i == 0:
-            if psi[i] == 1:
-                model.addConstr(quicksum(u[j] * B[j, i] for j in range(n)) - z[i] == f[i])
-            else:
-                model.addConstr(z[i] == 0)
-                model.addConstr(quicksum(u[j] * B[j, i] for j in range(n)) == f[i])
-
-            continue
-
-        parent = list(tree.predecessors(i))[0]
-        
-        if (psi[i], psi[parent]) == (1, 1):
-            model.addConstr(z[i] == 0)
-            model.addConstr(quicksum(u[j] * B[j, i] for j in range(n)) == f[i])
-        elif (psi[i], psi[parent]) == (1, 0):
-            model.addConstr(quicksum(u[j] * B[j, i] for j in range(n)) - z[i] == f[i])
-        elif (psi[i], psi[parent]) == (0, 1):
-            model.addConstr(quicksum(u[j] * B[j, i] for j in range(n)) + z[i] == f[i])
-        else:
-            model.addConstr(z[i] == 0)
-            model.addConstr(quicksum(u[j] * B[j, i] for j in range(n)) == f[i])
-
-    model.optimize()
-
-    if model.status == GRB.OPTIMAL:
-        print('Optimal solution found:')
-        for i in range(n):
-            print('u[{}] = {:.2f}'.format(i, u[i].x))
-        for i in range(n):
-            print('z[{}] = {:.2f}'.format(i, z[i].x))
- 
-    u = np.array([u[i].x for i in range(n)])
-    print(u.T @ B)
-    print(f)
-    print(np.sum(np.abs(u.T @ B)))
+    return obj
 
 if __name__ == '__main__':
     args = parse_args()
 
     if args.tree:
         tree = nx.read_adjlist(args.tree, nodetype=int, create_using=nx.DiGraph())
-        B = construct_matrix_B(tree)
+        B = construct_clonal_matrix(tree)
     else:
-        B = pd.read_csv(args.matrix, header=None).values
+        B = np.loadtxt(args.clonal_matrix)
 
-    f = pd.read_csv(args.vector, header=None).values.flatten()
+    F = np.loadtxt(args.frequency_matrix)
 
-    vafpp_linear_program(B, f)
-    solve_dual(tree, f)
+    obj1 = one_vafpp_linear_program(B, F)
+    obj2 = one_vafpp_dual(tree, F)
+
+    print("Linear Program Objective: {}".format(obj1))
+    print("Dual Objective: {}".format(obj2))
+
