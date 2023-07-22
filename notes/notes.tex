@@ -128,6 +128,16 @@ single sample, since the objective is separable with respect to the samples.
 That is, we can assume $F$ is a row vector, which we denote as $f^T$, and the
 goal is to find a usage vector $u^T$ such that $\lVert f^T - u^TB \rVert_p$ is minimized.
 
+\begin{mdframed}
+\begin{align}
+  \max_{u \geq 0, z \geq 0} &-\sum_{i=1}^n z_i \nonumber \\
+  \text{subject to }\quad z_i &\geq f_i - \sum_{j=1}^n u_j B_{ji} \quad\text{ for all } i \in [n] \label{eq:constr1} \\
+  z_i &\geq \sum_{j=1}^n u_j B_{ji} - f_i \quad\text{ for all } i \in [n] \label{eq:constr2} \\
+  1 &\geq \sum_{i=1}^n u_i \label{eq:constr3}
+\end{align}
+\end{mdframed}
+
+
 Here, we will consider the case where $p = 1$, since it has not yet been 
 studied in the literature and is more robust to outliers. 
 The case where $p = 2$ is the well-known case studied by \cite{jia_efficient_2018},
@@ -206,24 +216,27 @@ the following equivalent, dual linear program.
 
 \begin{mdframed}
   \begin{align}
-    \min \qquad&\gamma(1-f_{\text{root}}) + \sum_{i=1}^n \psi_i\left(f_i - \sum_{j \in \text{child}(i)} f_j\right) \\
-    \text{subject to } \quad &\psi_i, \gamma \in [0, 1]
+    \min_{\gamma \geq 0, \psi \geq 0} \qquad&\gamma(1-f_{\text{root}}) + \sum_{i=1}^n \psi_i\left(f_i - \sum_{j \in \text{child}(i)} f_j\right) \\
+    \text{subject to } \quad &|\psi_i - \psi_{\text{parent}(i)}| \leq 1 \quad\text{ for all } i \neq \text{root} \label{eq:dualconstr0} \\
+                             &|\psi_{\text{root}} - \gamma| \leq 1
   \end{align}
 \end{mdframed}
 
-Notice that this linear program is trivial to solve, by setting
+Notice that a feasible solution to this linear program is obtained
+by setting
 $$\gamma = 0 \text{ and } \psi_i = \begin{cases}
   0 &\text{ if } f_i \geq \sum_{j \in \text{child}(i)} f_j, \\
   1 &\text{ otherwise}.
 \end{cases}$$
 which takes objective value $0$ if and only $f$ satisfies the sum condition,
-providing another proof of the sufficiency of this condition.
+providing another proof of the sufficiency of the sum condition, and a lower
+bound on the true solution that is easy to calculate.
 
 \begin{theorem}
   Given a frequency vector $f \in \mathbb{R}^n$ and a clonal matrix $B \in \mathbb{R}^{n \times n}$,
   the minimum of 
   $$\lVert f^T - u^TB \rVert_1$$
-  over all usage vectors $u \in \mathbb{R}^n$ is equal to
+  over all usage vectors $u \in \mathbb{R}^n$ is \emph{at least}
   $$\sum_{i=1}^n \max\left\{0, \sum_{j \in \text{child}(i)} f_j - f_i\right\},$$
   where $\text{child}(i)$ is the set of children of vertex $i$ in the tree corresponding to $B$.
 \newpage

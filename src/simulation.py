@@ -46,13 +46,12 @@ def simulate_clonal_tree(m, n):
 Constructs the clonal matrix from a clonal tree.
 """
 def construct_clonal_matrix(tree):
-    nodes = list(tree.nodes)
-    n = len(nodes)
+    n = len(tree.nodes)
 
     B = np.zeros((n, n))
     for i in range(n):
         for j in range(n):
-            if nx.has_path(tree, nodes[i], nodes[j]):
+            if nx.has_path(tree, i, j):
                 B[j, i] = 1
 
     return B
