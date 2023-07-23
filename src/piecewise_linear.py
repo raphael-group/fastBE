@@ -39,6 +39,9 @@ $g(\lambda) = \min_{x \in [\lambda - 1, \lambda + 1], x \geq 0} f(x)$
 """
 def compute_minimizer(f : PiecewiseLinear) -> PiecewiseLinear:
     if np.all(f.slopes <= 0):
+        if len(f.slopes) == 1:
+            return PiecewiseLinear(f.slopes, f.intercept + f.slopes[0])
+
         return PiecewiseLinear(f.slopes[1:], f.intercept + f.slopes[0])
 
     # jl is the smallest index such that f.slopes[jl] >= 0
@@ -100,4 +103,3 @@ if __name__ == "__main__":
 
     plot(f1 + f2 + f3, axes[3], "f1 + f2 + f3")
     plt.show()
-
