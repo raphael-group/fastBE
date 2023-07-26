@@ -92,14 +92,23 @@ if __name__ == "__main__":
     plot(f1, axes[0], "f1")
     plot_minimizer_numeric(f1, axes[0], "g1_approx")
     plot(compute_minimizer(f1), axes[0], "g1_exact")
+    print(f1)
+    print(compute_minimizer(f1))
 
     plot(f2, axes[1], "f2")
     plot(compute_minimizer(f2), axes[1], "g2_exact")
     plot_minimizer_numeric(f2, axes[1], "g2_approx")
+    print(f2)
+    print(compute_minimizer(f2))
 
     plot(f3, axes[2], "f3")
     plot(compute_minimizer(f3), axes[2], "g3_exact")
     plot_minimizer_numeric(f3, axes[2], "g3_approx")
+    print(f3)
+    print(compute_minimizer(f3))
 
     plot(f1 + f2 + f3, axes[3], "f1 + f2 + f3")
+    print(f1 + f2 + f3)
+    print(compute_minimizer(f1 + f2 + f3))
+
     plt.show()
