@@ -131,13 +131,14 @@ void perform_regression(argparse::ArgumentParser regress) {
     auto start = std::chrono::high_resolution_clock::now();
     double obj = one_vafpp(clone_tree, vertex_map, frequency_matrix);
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
     json output;
-    output["time (ms)"] = duration.count();
+    output["time (ns)"] = duration.count();
+    output["time (s)"]  = duration.count() / 1e9;
     output["objective_value"] = obj;
 
-    std::ofstream output_file(regress.get<std::string>("output"));
+    std::ofstream output_file(regress.get<std::string>("output") + "_results.json");
     output_file << output.dump(4) << std::endl;
     output_file.close();
 

@@ -125,8 +125,11 @@ def main():
     parser.add_argument('--samples', type=int, required=True, help='Number of sequenced samples.')
     parser.add_argument('--coverage', type=float, required=True, help='Expected sequencing coverage.')
     parser.add_argument('--output', type=str, required=True, help='Output prefix.')
+    parser.add_argument('--seed', type=int, default=0, help='Random seed.')
 
     args = parser.parse_args()
+
+    np.random.seed(args.seed)
 
     tree, mutation_to_clone_mapping = simulate_clonal_tree(args.mutations, args.clones)
     clonal_matrix = construct_clonal_matrix(tree)

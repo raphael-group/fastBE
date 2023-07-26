@@ -10,6 +10,8 @@ implemented here is a reference implementation for debugging purposes
 -- the actual implementation is in C++.
 """
 
+import json
+import time
 import argparse
 import numpy as np
 import pandas as pd
@@ -28,6 +30,9 @@ def parse_args():
                         help='Adjacency list describing the input tree.')
     parser.add_argument('--frequency-matrix', type=str, required=True,
                         help='Numpy TXT file containing the input frequency matrix F.')
+
+    parser.add_argument('--output', type=str, required=True,
+                        help="Prefix of output files.")
 
     return parser.parse_args()
 
@@ -70,7 +75,7 @@ def one_vafpp_linear_program(B, F):
     model.setObjective(Z.sum(), GRB.MINIMIZE)
     model.optimize()
 
-    return model.objVal
+    return model.objVal, model.Runtime
 
 """
 Given a frequency matrix $F$ and a clonal matrix $B$, this function
@@ -94,7 +99,7 @@ def one_vafpp_dual_linear_program(B, F):
     model.setObjective(quicksum(gamma) + quicksum(F[k, i] * (beta[i, k] - alpha[i, k]) for k in range(m) for i in range(n)), GRB.MINIMIZE)
     model.optimize()
 
-    return -1 * model.objVal
+    return -1 * model.objVal, model.Runtime
 
 """
 Given a frequency matrix $F$ and a clone tree $T$, this function
@@ -142,11 +147,30 @@ if __name__ == '__main__':
 
     F = np.loadtxt(args.frequency_matrix)
 
-    obj1 = one_vafpp_linear_program(B, F)
+    results = {}
+
+    start = time.time()
+    obj1, gurobi_time = one_vafpp_linear_program(B, F)
+    end = time.time()
+
+    results["lp_time_with_building"] = end - start
+    results["lp_time_without_building"] = gurobi_time
+    results["lp_obj"] = obj1
+
+    start = time.time()
     obj2 = one_vafpp_dual_linear_program(B, F)
+    end = time.time()
+
+    results["dual_time_with_building"] = end - start
+    results["dual_time_without_building"] = gurobi_time
+    results["dual_obj"] = obj2
+
+    start = time.time()
     obj3 = one_vafpp_dp(tree, F)
+    end = time.time()
 
-    print("Dynamic Programming Objective: {}".format(obj3))
-    print("Linear Program Objective: {}".format(obj1))
-    print("Dual Objective: {}".format(obj2))
+    results["dp_time"] = end - start
+    results["dp_obj"] = obj3
 
+    with open(f"{args.output}_results.json", 'w') as f:
+        json.dump(results, f, indent=4)
