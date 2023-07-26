@@ -8,6 +8,7 @@
 #include <digraph.hpp>
 #include <piecewiselinearf.hpp>
 
+#include <chrono>
 #include <functional>
 #include <random>
 #include <fstream>
@@ -20,16 +21,21 @@
 #include <stack>
 #include <tuple>
 
-using namespace std;
 using json = nlohmann::json;
 
 /*
  * Given a frequency matrix $F$ and a clone tree $T$, this function
  * finds the minimizing value of $$\sum_{i=1}^m\lVert F_i - (UB)_i \rVert_1$$ 
  * over all usage matrices in $\mathcal{O}(mn^2)$ using dynamic programming 
- * and an analysis of convex and continuous,  piecewise linear functions.
+ * and an analysis of convex and continuous, piecewise linear functions.
+ *
+ * Input: 
+ *  - clone_tree: A clone tree represented as a digraph.
+ *  - vertex_map: A map from the rows of the frequency matrix to the 
+ *    vertices of the clone tree.
+ *  - F: A frequency matrix represented as a 2D vector.
 */
-double one_vafpp(const digraph<int> clone_tree, std::vector<std::vector<double>>& F) {
+double one_vafpp(const digraph<int>& clone_tree, const std::map<int, int>& vertex_map, std::vector<std::vector<double>>& F) {
     size_t nrows = F.size();
     size_t ncols = F[0].size();
 
@@ -38,19 +44,19 @@ double one_vafpp(const digraph<int> clone_tree, std::vector<std::vector<double>>
     for (size_t j = 0; j < nrows; ++j) {
         for (size_t i = 0; i < ncols; ++i) {
             W[j][i] = F[j][i];
-            for (auto k : clone_tree.successors(i)) {
+            for (auto k : clone_tree.successors(vertex_map.at(i))) {
                 W[j][i] -= F[j][clone_tree[k].data];
             }
         }
     }
 
     std::function<PiecewiseLinearF(size_t, size_t)> one_vafpp_recursive = [&](size_t j, size_t i) {
-        if (clone_tree.out_degree(i) == 0) {
+        if (clone_tree.out_degree(vertex_map.at(i)) == 0) {
             return PiecewiseLinearF({W[j][i]}, 0); 
         }
 
         PiecewiseLinearF g_out({W[j][i]}, 0);
-        for (auto k : clone_tree.successors(i)) {
+        for (auto k : clone_tree.successors(vertex_map.at(i))) {
             auto f = one_vafpp_recursive(j, clone_tree[k].data);
             auto g = compute_minimizer(f);
             g_out = g_out + g;
@@ -63,7 +69,8 @@ double one_vafpp(const digraph<int> clone_tree, std::vector<std::vector<double>>
     for (size_t j = 0; j < nrows; ++j) {
         auto f = one_vafpp_recursive(j, 0);
         f = compute_minimizer(f) + PiecewiseLinearF({1 - F[j][0]}, 0);
-        obj += *min_element(f.intercepts.begin(), f.intercepts.end());
+        double row_obj = *min_element(f.intercepts.begin(), f.intercepts.end());
+        obj += row_obj;
     }
 
     return -1 * obj;
@@ -118,11 +125,22 @@ std::vector<std::vector<double>> parse_frequency_matrix(const std::string& filen
 }
 
 void perform_regression(argparse::ArgumentParser regress) {
-    digraph<int> clone_tree = parse_adjacency_list(regress.get<std::string>("clone_tree"));
+    auto [clone_tree, vertex_map] = parse_adjacency_list(regress.get<std::string>("clone_tree"));
     std::vector<std::vector<double>> frequency_matrix = parse_frequency_matrix(regress.get<std::string>("frequency_matrix"));
 
-    double obj = one_vafpp(clone_tree, frequency_matrix);
-    std::cout << obj << std::endl;
+    auto start = std::chrono::high_resolution_clock::now();
+    double obj = one_vafpp(clone_tree, vertex_map, frequency_matrix);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+    json output;
+    output["time (ms)"] = duration.count();
+    output["objective_value"] = obj;
+
+    std::ofstream output_file(regress.get<std::string>("output"));
+    output_file << output.dump(4) << std::endl;
+    output_file.close();
+
     return;
 }
 

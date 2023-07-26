@@ -1,6 +1,7 @@
 #ifndef _DIGRAPH_H
 #define _DIGRAPH_H
 
+#include <utility>
 #include <vector>
 #include <set>
 #include <map>
@@ -119,7 +120,7 @@ public:
  * Parses an adjacency list into a directed graph object, 
  * where the vertices are read in as integers.
  */
-digraph<int> parse_adjacency_list(const std::string& filename) {
+std::pair<digraph<int>, std::map<int, int>> parse_adjacency_list(const std::string& filename) {
     digraph<int> g;
 
     std::ifstream file(filename);
@@ -156,7 +157,7 @@ digraph<int> parse_adjacency_list(const std::string& filename) {
     }
 
     file.close();
-    return g;
+    return std::make_pair(g, vertex_map);
 }
 
 #endif

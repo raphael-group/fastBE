@@ -126,8 +126,8 @@ def one_vafpp_dp(tree, F):
     for j in range(F.shape[0]):
         f = one_vafpp_dual_recursive(j, 0)
         f = pl.compute_minimizer(f) + pl.PiecewiseLinear([1 - F[j, 0]], 0)
-        print(f)
-        obj += np.min(f.intercepts)
+        row_obj = np.min(f.intercepts)
+        obj += row_obj
         
     return -1 * obj
 
