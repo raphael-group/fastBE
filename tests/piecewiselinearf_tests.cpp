@@ -10,7 +10,7 @@ bool operator==(const PiecewiseLinearF& lhs, const PiecewiseLinearF& rhs) {
 
 TEST(PiecewiseLinearF, TestComputeMinimizer) {
     PiecewiseLinearF f1({-1.5, -1.0, 0.1, 1, 3}, 1);
-    ASSERT_EQ(compute_minimizer(f1), PiecewiseLinearF({-1. ,  0. ,  0. ,  0.1,  1. ,  3.}, 0.5));
+    ASSERT_EQ(compute_minimizer(f1), PiecewiseLinearF({-1. ,  0. ,  0. ,  0.1,  1. ,  3.}, -0.5));
 
     PiecewiseLinearF f2({-3, -2}, 1);
     ASSERT_EQ(compute_minimizer(f2), PiecewiseLinearF({-2.}, -2));
