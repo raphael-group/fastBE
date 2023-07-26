@@ -4,7 +4,9 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <argparse/argparse.hpp>
 #include <csv.hpp>
+
 #include <vafpp.hpp>
+#include <digraph.hpp>
 
 #include <random>
 #include <fstream>
@@ -20,8 +22,15 @@
 using namespace std;
 
 using json = nlohmann::json;
+void perform_regression(argparse::ArgumentParser regress) {
+    digraph<int> clone_tree = parse_adjacency_list(regress.get<std::string>("clone_tree"));
+    for (auto v : clone_tree.nodes()) {
+        spdlog::info("Vertex {} has {} children", clone_tree[v].data, clone_tree.out_degree(v));
+        for (auto child : clone_tree.successors(v)) {
+            spdlog::info("Child {}", clone_tree[child].data);
+        }
+    }
 
-void do_search(argparse::ArgumentParser search) {
     return;
 }
 
@@ -37,41 +46,41 @@ int main(int argc, char *argv[])
         std::to_string(VAFPP_VERSION_MAJOR) + "." + std::to_string(VAFPP_VERSION_MINOR)
     );
 
-    argparse::ArgumentParser search(
-        "search"
+    argparse::ArgumentParser regress(
+        "regress"
     );
 
-    search.add_description("Infers a clone tree using local tree rearrangement operations");
+    regress.add_description("Regresses a clone tree onto a frequency matrix.");
 
-    search.add_argument("clone_tree")
-          .help("adjacency list of the clone tree");
+    regress.add_argument("clone_tree")
+           .help("adjacency list of the clone tree");
 
-    search.add_argument("frequency_matrix")
-          .help("TXT file containing the frequency matrix");
+    regress.add_argument("frequency_matrix")
+           .help("TXT file containing the frequency matrix");
 
-    search.add_argument("-o", "--output")
-          .help("prefix of the output files")
-          .required();
+    regress.add_argument("-o", "--output")
+           .help("prefix of the output files")
+           .required();
 
-    search.add_argument("-a", "--aggression")
-          .help("aggression of stochastic perturbation in (0, infinity)")
-          .default_value(1.0)
-          .scan<'g', double>();
+    regress.add_argument("-a", "--aggression")
+           .help("aggression of stochastic perturbation in (0, infinity)")
+           .default_value(1.0)
+           .scan<'g', double>();
 
-    search.add_argument("-i", "--iterations")
-          .help("number of iterations to perform without improvement before stopping")
-          .default_value(100)
-          .scan<'d', int>();
+    regress.add_argument("-i", "--iterations")
+           .help("number of iterations to perform without improvement before stopping")
+           .default_value(100)
+           .scan<'d', int>();
 
-    program.add_subparser(search);
+    program.add_subparser(regress);
     
     try {
         program.parse_args(argc, argv);
     } catch (const std::runtime_error& err) {
         std::cerr << err.what() << std::endl;
 
-        if (program.is_subcommand_used(search)) {
-            std::cerr << search;
+        if (program.is_subcommand_used(regress)) {
+            std::cerr << regress;
         } else {
             std::cerr << program;
         }
@@ -79,8 +88,8 @@ int main(int argc, char *argv[])
         std::exit(1);
     }
 
-    if (program.is_subcommand_used(search)) {
-        do_search(search);
+    if (program.is_subcommand_used(regress)) {
+        perform_regression(regress);
     } else {
         std::cerr << program;
     }
