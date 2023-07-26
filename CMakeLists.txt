@@ -14,6 +14,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 project(vafpp VERSION 1.0)
 
 add_subdirectory(src/)
+add_subdirectory(tests/)
 
 target_include_directories(vafpp PUBLIC "${vafpp_SOURCE_DIR}/include")
 target_include_directories(vafpp PUBLIC "${vafpp_SOURCE_DIR}/third-party/csv-parser/include")
@@ -27,3 +28,10 @@ add_subdirectory(third-party/pprint)
 add_subdirectory(third-party/csv-parser)
 add_subdirectory(third-party/argparse)
 add_subdirectory(third-party/json)
+add_subdirectory(third-party/gtest)
+
+# add include directories for all tests
+target_include_directories(piecewiselinear_test PUBLIC "${vafpp_SOURCE_DIR}/include")
+target_include_directories(piecewiselinear_test PUBLIC "${vafpp_SOURCE_DIR}/third-party/csv-parser/include")
+
+enable_testing()

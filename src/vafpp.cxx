@@ -3,10 +3,10 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <argparse/argparse.hpp>
-#include <csv.hpp>
 
 #include <vafpp.hpp>
 #include <digraph.hpp>
+#include <piecewiselinearf.hpp>
 
 #include <random>
 #include <fstream>
@@ -31,6 +31,18 @@ void perform_regression(argparse::ArgumentParser regress) {
         }
     }
 
+    PiecewiseLinearF f1({-1.5, -1.0, 0.1, 1, 3}, 1);
+    // assert compute_minimizer(f1) == PiecewiseLinearF({-1. ,  0. ,  0. ,  0.1,  1. ,  3.}, 0.5)
+
+    PiecewiseLinearF f2({-3, -2}, 1);
+    // assert compute_minimizer(f2) == PiecewiseLinearF({-2.}, -2)
+    
+    PiecewiseLinearF f3({3, 4}, 1);
+    // assert compute_minimizer(f3) == PiecewiseLinearF({0, 3., 4}, 1)
+
+    // assert f1 + f2 + f3 == PiecewiseLinearF({-1.5,  1. ,  2.1,  3. ,  5.}, 3)
+    // assert compute_minimiizer(f1 + f2 + f3) == PiecewiseLinearF({0. , 0. , 1. , 2.1, 3. , 5.}, 1.5)
+    
     return;
 }
 
