@@ -1,6 +1,13 @@
-params.sim_script = '/home/schmidt73/Desktop/VAFPP Optimization/scripts/simulation.py'
-params.python_script = '/home/schmidt73/Desktop/VAFPP Optimization/scripts/vafpp_lp.py'
-params.cpp_command = '/home/schmidt73/Desktop/VAFPP Optimization/build/src/vafpp'
+params.proj_dir      = "/n/fs/ragr-research/projects/vafpp"
+params.sim_script    = "${params.proj_dir}/scripts/simulation.py"
+params.python_script = "${params.proj_dir}/scripts/vafpp_lp.py"
+params.cpp_command   = "${params.proj_dir}/build/src/vafpp"
+
+params.nmutations = [500, 1000, 2000, 4000]
+params.nclones    = [250, 500, 750, 1000]
+params.nsamples   = [50, 100, 200, 500]
+params.seeds      = [0, 1, 2, 3, 4, 5]
+params.coverage   = [50]
 
 process create_sim {
     input:
@@ -8,7 +15,8 @@ process create_sim {
 
     output:
         tuple file("sim_clonal_matrix.txt"), file("sim_mutation_to_clone_mapping.txt"), file("sim_obs_frequency_matrix.txt"), 
-              file("sim_total_matrix.txt"), file("sim_tree.txt"), file("sim_usage_matrix.txt"), file("sim_variant_matrix.txt")
+              file("sim_total_matrix.txt"), file("sim_tree.txt"), file("sim_usage_matrix.txt"), file("sim_variant_matrix.txt"),
+              val("m${mutations}_n${clones}_s${samples}_c${coverage}_r${seed}")
 
     """
     python '${params.sim_script}' --mutations ${mutations} --samples ${samples} --clones ${clones} --coverage ${coverage} --seed ${seed} --output sim
@@ -18,10 +26,10 @@ process create_sim {
 process regress_python {
     input:
         tuple path(clonal_matrix), path(mut_clone_mapping), path(freq_matrix), path(total_matrix),
-              path(clone_tree), path(usage_matrix), path(variant_matrix)
+              path(clone_tree), path(usage_matrix), path(variant_matrix), val(id)
 
     output:
-        file("python_results.json")
+        file "python_results.json"
 
     """
     python '${params.python_script}' --tree ${clone_tree} --frequency-matrix ${freq_matrix} --output python
@@ -31,10 +39,10 @@ process regress_python {
 process regress_cpp {
     input:
         tuple path(clonal_matrix), path(mut_clone_mapping), path(freq_matrix), path(total_matrix),
-              path(clone_tree), path(usage_matrix), path(variant_matrix)
+              path(clone_tree), path(usage_matrix), path(variant_matrix), val(id)
 
     output:
-        file("cpp_results.json")
+        tuple file("cpp_results.json"), val(id)
 
     """
     '${params.cpp_command}' regress ${clone_tree} ${freq_matrix} --output cpp
@@ -42,7 +50,25 @@ process regress_cpp {
 }
 
 workflow {
-    simulation = channel.of([50, 10, 25, 50, 0]) | create_sim 
+    parameter_channel = channel.fromList(params.nmutations)
+                               .combine(channel.fromList(params.nsamples))
+                               .combine(channel.fromList(params.nclones))
+                               .combine(channel.fromList(params.coverage))
+                               .combine(channel.fromList(params.seeds))
+
+    parameter_channel = parameter_channel.filter {
+      it[0] >= 2*it[2] // require twice as many mutations as clones
+    }
+
+    simulation =  parameter_channel | create_sim 
     cpp_res = simulation | regress_cpp
     py_res  = simulation | regress_python
+
+    cpp_res.collectFile{["${it[1]}_cpp_results.json", it[0]]}.subscribe {
+      println "A result is saved to $it"
+    }
+
+    py_res.collectFile{["${it[1]}_python_results.json", it[0]]}.subscribe {
+      println "A result is saved to $it"
+    }
 }
