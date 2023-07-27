@@ -64,10 +64,8 @@ def one_vafpp_linear_program(B, F):
     U = model.addMVar(shape=(m, n), lb=0, vtype=GRB.CONTINUOUS, name="U")
     Z = model.addMVar(shape=(m, n), lb=0, vtype=GRB.CONTINUOUS, name="Z")
 
-    for i in range(n):
-        for k in range(m):
-            model.addConstr(Z[k, i] >= F[k, i] - quicksum(U[k, j] * B[j, i] for j in range(n)))
-            model.addConstr(Z[k, i] >= quicksum(U[k, j] * B[j, i] for j in range(n)) - F[k, i])
+    model.addConstr(Z >= F - U @ B)
+    model.addConstr(Z >= U @ B - F)
 
     for k in range(m):
         model.addConstr(U[k, :].sum() <= 1)
@@ -91,10 +89,8 @@ def one_vafpp_dual_linear_program(B, F):
     beta = model.addMVar(shape=(n, m), lb=0, vtype=GRB.CONTINUOUS, name="beta")
     gamma = model.addMVar(shape=m, lb=0, vtype=GRB.CONTINUOUS, name="gamma")
 
-    for k in range(m):
-        for i in range(n):
-            model.addConstr(quicksum(B[i, j] * (beta[j, k] - alpha[j, k]) for j in range(n)) + gamma[k] >= 0)
-            model.addConstr(alpha[i, k] + beta[i, k] <= 1)
+    model.addConstr(B @ (beta - alpha) + gamma >= 0)
+    model.addConstr(alpha + beta <= 1)
 
     model.setObjective(quicksum(gamma) + quicksum(F[k, i] * (beta[i, k] - alpha[i, k]) for k in range(m) for i in range(n)), GRB.MINIMIZE)
     model.optimize()
