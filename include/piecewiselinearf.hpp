@@ -18,7 +18,7 @@ public:
     PiecewiseLinearF(const std::vector<double>& slopes, double intercept, std::size_t capacity) 
       : intercept(intercept), slopes(slopes) {
         this->slopes.reserve(capacity);
-      }
+    }
 
     PiecewiseLinearF operator+(const PiecewiseLinearF& other) const {
         std::vector<double> self_slopes = slopes, other_slopes = other.slopes;
@@ -63,6 +63,19 @@ public:
         }
         return intercepts;
     }
+
+    double minimizer() const {
+        double minval = intercept, sum = intercept;
+
+        for (std::size_t i = 0; i < slopes.size(); ++i) {
+            if (slopes[i] >= 0) break;
+            sum += slopes[i];
+            minval = std::min(minval, sum);
+        }
+
+        return minval;
+    }
+
     void compute_minimizer() {
         int jl = -1;
 

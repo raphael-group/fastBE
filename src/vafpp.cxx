@@ -59,7 +59,6 @@ double one_vafpp(const digraph<int>& clone_tree, const std::map<int, int>& verte
         for (auto k : clone_tree.successors(vertex_map.at(i))) {
             auto f = one_vafpp_recursive(j, clone_tree[k].data);
             f.compute_minimizer();
-            //g_out = g_out + f;
             g_out.addInPlace(std::move(f));
         }
 
@@ -69,10 +68,9 @@ double one_vafpp(const digraph<int>& clone_tree, const std::map<int, int>& verte
     double obj = 0;
     for (size_t j = 0; j < nrows; ++j) {
         auto f = one_vafpp_recursive(j, 0);
-        f = compute_minimizer(f) + PiecewiseLinearF({1 - F[j][0]}, 0);
-        std::vector<double> intercepts = f.intercepts();
-        double row_obj = *min_element(intercepts.begin(), intercepts.end());
-        obj += row_obj;
+        f.compute_minimizer();
+        f.addInPlace(PiecewiseLinearF({1 - F[j][0]}, 0));
+        obj += f.minimizer();
     }
 
     return -1 * obj;
