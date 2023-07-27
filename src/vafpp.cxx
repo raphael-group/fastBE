@@ -58,8 +58,9 @@ double one_vafpp(const digraph<int>& clone_tree, const std::map<int, int>& verte
         PiecewiseLinearF g_out({W[j][i]}, 0);
         for (auto k : clone_tree.successors(vertex_map.at(i))) {
             auto f = one_vafpp_recursive(j, clone_tree[k].data);
-            auto g = compute_minimizer(f);
-            g_out = g_out + g;
+            f.compute_minimizer();
+            //g_out = g_out + f;
+            g_out.addInPlace(std::move(f));
         }
 
         return g_out;
@@ -69,7 +70,8 @@ double one_vafpp(const digraph<int>& clone_tree, const std::map<int, int>& verte
     for (size_t j = 0; j < nrows; ++j) {
         auto f = one_vafpp_recursive(j, 0);
         f = compute_minimizer(f) + PiecewiseLinearF({1 - F[j][0]}, 0);
-        double row_obj = *min_element(f.intercepts.begin(), f.intercepts.end());
+        std::vector<double> intercepts = f.intercepts();
+        double row_obj = *min_element(intercepts.begin(), intercepts.end());
         obj += row_obj;
     }
 
@@ -130,6 +132,11 @@ void perform_regression(argparse::ArgumentParser regress) {
 
     auto start = std::chrono::high_resolution_clock::now();
     double obj = one_vafpp(clone_tree, vertex_map, frequency_matrix);
+
+    for (size_t i = 0; i < regress.get<int>("num_reps") - 1; ++i) {
+        one_vafpp(clone_tree, vertex_map, frequency_matrix);
+    }
+
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
@@ -181,6 +188,11 @@ int main(int argc, char *argv[])
     regress.add_argument("-i", "--iterations")
            .help("number of iterations to perform without improvement before stopping")
            .default_value(100)
+           .scan<'d', int>();
+
+    regress.add_argument("-n", "--num_reps")
+           .help("number of times to repeat the regression for benchmarking")
+           .default_value(1)
            .scan<'d', int>();
 
     program.add_subparser(regress);
