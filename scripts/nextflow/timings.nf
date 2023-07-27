@@ -10,6 +10,10 @@ params.seeds      = [0, 1, 2, 3, 4, 5]
 params.coverage   = [50]
 
 process create_sim {
+    cpus 1
+    memory '4 GB'
+    time '59m'
+
     input:
         tuple val(mutations), val(samples), val(clones), val(coverage), val(seed)
 
@@ -24,19 +28,29 @@ process create_sim {
 }
 
 process regress_python {
+    cpus 4
+    memory '32 GB'
+    time '59m'
+    errorStrategy 'ignore'
+
     input:
         tuple path(clonal_matrix), path(mut_clone_mapping), path(freq_matrix), path(total_matrix),
               path(clone_tree), path(usage_matrix), path(variant_matrix), val(id)
 
     output:
-        file "python_results.json"
+        tuple file("python_results.json"), val(id)
 
     """
+    module load gurobi
     python '${params.python_script}' --tree ${clone_tree} --frequency-matrix ${freq_matrix} --output python
     """
 }
 
 process regress_cpp {
+    cpus 1
+    memory '2 GB'
+    time '59m'
+
     input:
         tuple path(clonal_matrix), path(mut_clone_mapping), path(freq_matrix), path(total_matrix),
               path(clone_tree), path(usage_matrix), path(variant_matrix), val(id)
