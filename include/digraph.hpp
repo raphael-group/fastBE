@@ -1,6 +1,7 @@
 #ifndef _DIGRAPH_H
 #define _DIGRAPH_H
 
+#include <random>
 #include <utility>
 #include <vector>
 #include <set>
@@ -116,6 +117,23 @@ public:
     }
 };
 
+
+// to_adjacency_list:
+//   - takes a digraph and a verte to name map (std::map<int, int>) and returns a string
+
+template <class T>
+std::string to_adjacency_list(const digraph<T>& G, const std::map<int, int>& vertex_map) {
+    std::stringstream ss;
+    for (const auto& u : G.nodes()) {
+        ss << vertex_map.at(u) << " ";
+        for (const auto& v : G.successors(u)) {
+            ss << vertex_map.at(v) << " ";
+        }
+        ss << std::endl;
+    }
+    return ss.str();
+}
+
 /*
  * Parses an adjacency list into a directed graph object, 
  * where the vertices are read in as integers.
@@ -158,6 +176,61 @@ std::pair<digraph<int>, std::map<int, int>> parse_adjacency_list(const std::stri
 
     file.close();
     return std::make_pair(g, vertex_map);
+}
+
+/*
+ * Generates a random integer in the range [a, b].
+ */
+int rand_int(std::ranlux48_base& gen, int a, int b) {
+    std::uniform_int_distribution<int> distrib(a, b);
+    return distrib(gen);
+}
+
+/*
+ * Generates a random spanning tree of the given graph using
+ * Wilson's algorithm, where all edge weights are assumed to be 1.
+ *
+ * Returns:
+ *   - Random spanning tree of G
+ *   - Root of the tree
+ *
+ * Warning: The graph must be strongly connected.
+ */
+template <class T>
+std::pair<digraph<T>, int> sample_random_spanning_tree(const digraph<T> &G, std::ranlux48_base& gen) {
+    digraph<T> spanning_tree;
+    for (int u : G.nodes()) {
+        spanning_tree.add_vertex(G[u].data);
+    }
+
+    std::vector<int> next(G.nodes().size(), -1);
+    std::vector<bool> in_tree(G.nodes().size(), false);
+
+    int root = rand_int(gen, 0, G.nodes().size() - 1);
+    in_tree[root] = true;
+    for (int u : G.nodes()) {
+        if (in_tree[u]) continue;
+
+        int v = u;
+        while (!in_tree[v]) {
+            auto& pred = G.predecessors(v);
+            if (pred.size() == 0) {
+                throw std::runtime_error("Graph is not strongly connected");
+            }
+
+            next[v] = *std::next(pred.begin(), rand_int(gen, 0, pred.size() - 1));
+            v = next[v];
+        }
+
+        v = u;
+        while (!in_tree[v]) {
+            in_tree[v] = true;
+            spanning_tree.add_edge(next[v], v);
+            v = next[v];
+        }
+    }
+
+    return std::make_pair(spanning_tree, root);
 }
 
 #endif

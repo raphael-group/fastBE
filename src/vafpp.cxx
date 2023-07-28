@@ -8,6 +8,7 @@
 #include <digraph.hpp>
 #include <piecewiselinearf.hpp>
 
+#include <random>
 #include <chrono>
 #include <functional>
 #include <random>
@@ -35,7 +36,7 @@ using json = nlohmann::json;
  *    vertices of the clone tree.
  *  - F: A frequency matrix represented as a 2D vector.
 */
-double one_vafpp(const digraph<int>& clone_tree, const std::map<int, int>& vertex_map, std::vector<std::vector<double>>& F) {
+double one_vafpp(const digraph<int>& clone_tree, const std::map<int, int>& vertex_map, std::vector<std::vector<double>>& F, int root) {
     size_t nrows = F.size();
     size_t ncols = F[0].size();
 
@@ -67,7 +68,7 @@ double one_vafpp(const digraph<int>& clone_tree, const std::map<int, int>& verte
 
     double obj = 0;
     for (size_t j = 0; j < nrows; ++j) {
-        auto f = one_vafpp_recursive(j, 0);
+        auto f = one_vafpp_recursive(j, root);
         f.compute_minimizer();
         f.addInPlace(PiecewiseLinearF({1 - F[j][0]}, 0));
         obj += f.minimizer();
@@ -75,7 +76,6 @@ double one_vafpp(const digraph<int>& clone_tree, const std::map<int, int>& verte
 
     return -1 * obj;
 }
-
 
 /* 
  * This function parses a frequency matrix from a text file and returns it as a 2D vector.
@@ -129,10 +129,10 @@ void perform_regression(argparse::ArgumentParser regress) {
     std::vector<std::vector<double>> frequency_matrix = parse_frequency_matrix(regress.get<std::string>("frequency_matrix"));
 
     auto start = std::chrono::high_resolution_clock::now();
-    double obj = one_vafpp(clone_tree, vertex_map, frequency_matrix);
+    double obj = one_vafpp(clone_tree, vertex_map, frequency_matrix, 0);
 
-    for (size_t i = 0; i < regress.get<int>("num_reps") - 1; ++i) {
-        one_vafpp(clone_tree, vertex_map, frequency_matrix);
+    for (size_t i = 0; i < regress.get<size_t>("num_reps") - 1; ++i) {
+        one_vafpp(clone_tree, vertex_map, frequency_matrix, 0);
     }
 
     auto end = std::chrono::high_resolution_clock::now();
@@ -146,6 +146,57 @@ void perform_regression(argparse::ArgumentParser regress) {
     std::ofstream output_file(regress.get<std::string>("output") + "_results.json");
     output_file << output.dump(4) << std::endl;
     output_file.close();
+
+    return;
+}
+
+void perform_search(argparse::ArgumentParser search) {
+    std::vector<std::vector<double>> frequency_matrix = parse_frequency_matrix(search.get<std::string>("frequency_matrix"));
+
+    size_t nrows = frequency_matrix.size();
+    size_t ncols = frequency_matrix[0].size();
+
+    digraph<int> complete_graph;
+    for (size_t i = 0; i < ncols; ++i) {
+        complete_graph.add_vertex(i);
+    }
+
+    for (size_t i = 0; i < ncols; ++i) {
+        for (size_t j = 0; j < ncols; ++j) {
+            if (i == j) continue;
+            complete_graph.add_edge(i, j);
+        }
+    }
+
+
+    std::random_device rd;
+    std::ranlux48_base gen(rd());
+
+    std::map<int, int> identity_map;
+    for (size_t i = 0; i < ncols; ++i) {
+        identity_map[i] = i;
+    }
+
+    float min_obj = std::numeric_limits<float>::infinity();
+    std::optional<digraph<int>> min_tree;
+    for (size_t i = 0; i < search.get<size_t>("iterations"); i++) {
+        auto [clone_tree, root] = sample_random_spanning_tree(complete_graph, gen);
+        float obj = one_vafpp(clone_tree, identity_map, frequency_matrix, root);
+        if (obj < min_obj) {
+            min_obj = obj;
+            min_tree = clone_tree;
+        }
+    }
+
+    std::string adjacency_list = to_adjacency_list(*min_tree, identity_map);
+
+    std::ofstream adj_output(search.get<std::string>("output") + "_tree.txt");
+    adj_output << adjacency_list << std::endl;
+
+    json output;
+    output["objective_value"] = min_obj;
+    std::ofstream json_output(search.get<std::string>("output") + "_results.json");
+    json_output << output.dump(4) << std::endl;
 
     return;
 }
@@ -166,6 +217,10 @@ int main(int argc, char *argv[])
         "regress"
     );
 
+    argparse::ArgumentParser search(
+        "search"
+    );
+
     regress.add_description("Regresses a clone tree onto a frequency matrix.");
 
     regress.add_argument("clone_tree")
@@ -178,21 +233,29 @@ int main(int argc, char *argv[])
            .help("prefix of the output files")
            .required();
 
-    regress.add_argument("-a", "--aggression")
-           .help("aggression of stochastic perturbation in (0, infinity)")
-           .default_value(1.0)
-           .scan<'g', double>();
-
-    regress.add_argument("-i", "--iterations")
-           .help("number of iterations to perform without improvement before stopping")
-           .default_value(100)
-           .scan<'d', int>();
-
     regress.add_argument("-n", "--num_reps")
            .help("number of times to repeat the regression for benchmarking")
            .default_value(1)
-           .scan<'d', int>();
+           .scan<'d', size_t>();
 
+    search.add_argument("frequency_matrix")
+          .help("TXT file containing the frequency matrix");
+
+    search.add_argument("-o", "--output")
+          .help("prefix of the output files")
+          .required();
+
+    search.add_argument("-a", "--aggression")
+          .help("aggression of stochastic perturbation in (0, infinity)")
+          .default_value(1.0)
+          .scan<'g', double>();
+
+    search.add_argument("-i", "--iterations")
+          .help("number of iterations to perform without improvement before stopping")
+          .default_value(100)
+          .scan<'d', size_t>();
+
+    program.add_subparser(search);
     program.add_subparser(regress);
     
     try {
@@ -211,6 +274,8 @@ int main(int argc, char *argv[])
 
     if (program.is_subcommand_used(regress)) {
         perform_regression(regress);
+    } else if (program.is_subcommand_used(search)) {
+        perform_search(search);
     } else {
         std::cerr << program;
     }

@@ -55,15 +55,21 @@ if __name__ == "__main__":
     if args.output is not None:
         plt.savefig(f'{args.output}_vs_parameters.pdf')
 
-    fig, ax = plt.subplots(figsize=(7, 5))
+    fig, axes = plt.subplots(ncols=2, figsize=(10, 5))
 
-    speedup_df = df[df['algorithm'] == 'Handcrafted DP']
-    speedup_df = speedup_df.merge(df[df['algorithm'] == 'LP (Gurobi)'], on=['m', 'n', 's', 'c', 'r'])
-    speedup_df['speedup'] = speedup_df['time (s)_y'] / speedup_df['time (s)_x'] 
+    speedup_df = python_timing_df.merge(cpp_df, on=['m', 'n', 's', 'c', 'r'])
+    speedup_df['speedup_no_build'] = speedup_df['lp_time_without_building'] / speedup_df['cpp_dp_time'] 
+    speedup_df['speedup_with_build'] = speedup_df['lp_time_with_building'] / speedup_df['cpp_dp_time']
     speedup_df['(n, s)'] = speedup_df.apply(lambda row: f'({row["n"]}, {row["s"]})', axis=1)
 
-    sns.histplot(data=speedup_df['speedup'], ax=ax)
-    ax.set_xlabel('Relative Speedup (Time of LP (Gurobi) / Handcrafted DP)')
+    sns.histplot(data=speedup_df['speedup_with_build'], ax=axes[0])
+    sns.histplot(data=speedup_df['speedup_no_build'], ax=axes[1])
+    
+    axes[0].set_title('Relative Speedup With Model Building Time')
+    axes[1].set_title('Relative Speedup Without Model Building Time')
+
+    axes[0].set_xlabel('Relative Speedup (Time of LP (Gurobi) / Handcrafted DP)')
+    axes[1].set_xlabel('Relative Speedup (Time of LP (Gurobi) / Handcrafted DP)')
 
     if args.output is not None:
         plt.savefig(f'{args.output}_relative_speedup.pdf')
@@ -85,17 +91,17 @@ if __name__ == "__main__":
     if args.output is not None:
         plt.savefig(f'{args.output}_objective_comparison.pdf')
 
-    df['error'] = df['lp_obj'] - df['cpp_obj']
+    # df['error'] = df['lp_obj'] - df['cpp_obj']
 
     # plot error as histogram
-    fig, ax = plt.subplots(figsize=(7, 5))
+    # fig, ax = plt.subplots(figsize=(7, 5))
 
-    sns.histplot(data=df['error'], ax=ax)
-    ax.set_xlabel('LP Objective Value - Handcrafted DP Objective Value')
-    ax.set_ylabel('Count')
-
-    plt.tight_layout()
-    if args.output is not None:
-        plt.savefig(f'{args.output}_objective_error.pdf')
+    # sns.histplot(data=df['error'], ax=ax)
+    # ax.set_xlabel('LP Objective Value - Handcrafted DP Objective Value')
+    # ax.set_ylabel('Count')
+# 
+    # plt.tight_layout()
+    # if args.output is not None:
+        # plt.savefig(f'{args.output}_objective_error.pdf')
 
     plt.show()
