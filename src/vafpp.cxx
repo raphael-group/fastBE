@@ -40,7 +40,29 @@ struct clone_tree_vertex {
     bool valid;
     std::vector<double> w;
     std::vector<PiecewiseLinearF> fs;
+
+    clone_tree_vertex(size_t nrows, int id) : id(id), valid(false) {
+        w = std::vector<double>(nrows, 0.0);
+        fs = std::vector<PiecewiseLinearF>(nrows, PiecewiseLinearF({0.0}, 0.0));
+    }
+
+    clone_tree_vertex() : id(-1), valid(false) {}
 };
+
+digraph<clone_tree_vertex> convert_clone_tree(const digraph<int>& clone_tree, size_t nrows) {
+    digraph<clone_tree_vertex> new_clone_tree;
+    for (size_t node_id = 0; node_id < clone_tree.nodes().size(); ++node_id) {
+        int clone_id = clone_tree[node_id].data;
+        clone_tree_vertex vertex_data(nrows, clone_id);
+        new_clone_tree.add_vertex(vertex_data);
+    }
+
+    for (auto [u, v] : clone_tree.edges()) {
+        new_clone_tree.add_edge(u, v);
+    }
+
+    return new_clone_tree;
+}
 
 /*
  * Prunes the subtree rooted at vertex u and regrafts as a child of 
@@ -73,9 +95,24 @@ void perturb(digraph<T>& tree, int root, std::ranlux48_base& gen, int iters) {
     }
 }
 
-/* 
+/*
+ * Given a frequency matrix $F$ and a clone tree $T$, this function
+ * finds the minimizing value of $$\sum_{i=1}^m\lVert F_i - (UB)_i \rVert_1$$ 
+ * over all usage matrices in $\mathcal{O}(mn^2)$ using dynamic programming 
+ * and an analysis of convex and continuous, piecewise linear functions. 
+ *
+ * Importantly, this function avoids recomputation, by only updating the 
+ * piecewise linear functions of the clone tree at vertices whose subtrees have 
+ * been modified.
+ *
+ * Input: 
+ *  - clone_tree: A clone tree represented as a digraph.
+ *  - vertex_map: A map from the rows of the frequency matrix to the 
+ *    vertices of the clone tree.
+ *  - F: A frequency matrix represented as a 2D vector.
+*/
 double one_vafpp(
-    const digraph<clone_tree_vertex>& clone_tree, 
+    digraph<clone_tree_vertex>& clone_tree, 
     const std::map<int, int>& vertex_map, 
     const std::vector<std::vector<double>>& F, 
     int root
@@ -83,24 +120,53 @@ double one_vafpp(
     size_t nrows = F.size();
     size_t ncols = F[0].size();
 
-    std::function<PiecewiseLinearF(size_t, size_t)> one_vafpp_recursive = [&](size_t j, size_t i) {
+    std::function<void(int)> one_vafpp_recursive = [&](int i) {
+        if (clone_tree[vertex_map.at(i)].data.valid) return;
+
+        std::vector<double>& w_ref = clone_tree[vertex_map.at(i)].data.w;
+
+        /* If not valid, first set w vector. */
+        for (size_t j = 0; j < nrows; ++j) {
+            w_ref[j] = F[j][i];
+            for (auto k : clone_tree.successors(vertex_map.at(i))) {
+                w_ref[j] -= F[j][clone_tree[k].data.id];
+            }
+        }
+
+        /* If leaf, set piecewise linear function and return. */
         if (clone_tree.out_degree(vertex_map.at(i)) == 0) {
-            return PiecewiseLinearF({W[j][i]}, 0); 
+            for (size_t j = 0; j < nrows; ++j) {
+                clone_tree[vertex_map.at(i)].data.fs[j] = PiecewiseLinearF({w_ref[j]}, 0);
+            }
+
+            clone_tree[vertex_map.at(i)].data.valid = true;
+            return;
         }
 
-        PiecewiseLinearF g_out({W[j][i]}, 0);
+        /* Recurse at children. */
         for (auto k : clone_tree.successors(vertex_map.at(i))) {
-            auto f = one_vafpp_recursive(j, clone_tree[k].data);
-            f.compute_minimizer();
-            g_out.addInPlace(std::move(f));
+            one_vafpp_recursive(clone_tree[k].data.id);
         }
 
-        return g_out;
+        for (size_t j = 0; j < nrows; ++j) {
+            PiecewiseLinearF g_out({w_ref[j]}, 0);
+            for (auto k : clone_tree.successors(vertex_map.at(i))) {
+                PiecewiseLinearF f = clone_tree[k].data.fs[j];
+                f.compute_minimizer();
+                g_out.addInPlace(std::move(f));
+            }
+
+            clone_tree[vertex_map.at(i)].data.fs[j] = g_out;
+        }
+
+        clone_tree[vertex_map.at(i)].data.valid = true;
     };
+
+    one_vafpp_recursive(root);
 
     double obj = 0;
     for (size_t j = 0; j < nrows; ++j) {
-        auto f = one_vafpp_recursive(j, root);
+        PiecewiseLinearF f = clone_tree[root].data.fs[j];
         f.compute_minimizer();
         f.addInPlace(PiecewiseLinearF({1 - F[j][0]}, 0));
         obj += f.minimizer();
@@ -109,7 +175,6 @@ double one_vafpp(
     return -1 * obj;
 
 }
-*/
 
 /*
  * Given a frequency matrix $F$ and a clone tree $T$, this function
@@ -262,7 +327,7 @@ void perform_regression(argparse::ArgumentParser regress) {
     auto start = std::chrono::high_resolution_clock::now();
     double obj = one_vafpp(clone_tree, vertex_map, frequency_matrix, 0);
 
-    for (size_t i = 0; i < regress.get<size_t>("num_reps"); ++i) {
+    for (size_t i = 0; i < regress.get<size_t>("num_reps") - 1; ++i) {
         one_vafpp(clone_tree, vertex_map, frequency_matrix, 0);
     }
 
@@ -312,8 +377,9 @@ void perform_search(argparse::ArgumentParser search) {
     std::vector<std::pair<digraph<int>, float>> candidate_trees;
     for (size_t i = 0; i < search.get<size_t>("iterations"); i++) {
         auto [clone_tree, root] = sample_random_spanning_tree(complete_graph, gen, 0);
-        hill_climb(clone_tree, identity_map, frequency_matrix, 0, gen, 100);
+        hill_climb(clone_tree, identity_map, frequency_matrix, 0, gen, 1000);
         float obj = one_vafpp(clone_tree, identity_map, frequency_matrix, root);
+        spdlog::info("Seed iteration {}, Objective value: {}", i, obj);
         if (candidate_trees.size() < 10) {
             candidate_trees.push_back(std::make_pair(clone_tree, obj));
         } else {
@@ -325,24 +391,27 @@ void perform_search(argparse::ArgumentParser search) {
     }
 
     int num_no_improvement = 0;
-    while (num_no_improvement < 100) {
+    while (num_no_improvement < 25) {
         spdlog::info("Starting iteration {}.", num_no_improvement);
         spdlog::info("Candidate tree objectives:");
         for (const auto& [tree, obj] : candidate_trees) {
             spdlog::info("{}", obj);
         }
 
-        auto [clone_tree, obj] = candidate_trees[rand_int(gen, 0, candidate_trees.size() - 1)];
-        perturb(clone_tree, 0, gen, 1000);
-        hill_climb(clone_tree, identity_map, frequency_matrix, 0, gen, 1000);
+        const auto& [clone_tree, obj] = candidate_trees[rand_int(gen, 0, candidate_trees.size() - 1)];
+        digraph<int> clone_tree_copy = clone_tree;
 
-        float new_obj = one_vafpp(clone_tree, identity_map, frequency_matrix, 0);
+        perturb(clone_tree_copy, 0, gen, 1000);
+        hill_climb(clone_tree_copy, identity_map, frequency_matrix, 0, gen, 1000);
+
+        float new_obj = one_vafpp(clone_tree_copy, identity_map, frequency_matrix, 0);
         if (new_obj < obj) {
             spdlog::info("Found new best tree with objective value {}.", new_obj);
             num_no_improvement = 0;
-            candidate_trees.push_back(std::make_pair(clone_tree, new_obj));
             std::sort(candidate_trees.begin(), candidate_trees.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
             candidate_trees.pop_back();
+
+            candidate_trees.push_back(std::make_pair(clone_tree_copy, new_obj));
         } else {
             num_no_improvement++;
         }
