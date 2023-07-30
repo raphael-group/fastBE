@@ -115,11 +115,25 @@ public:
     size_t out_degree(int u) const {
         return succ.at(u).size();
     }
+
+    /*
+     * Returns true if u is an ancestor of v in the given tree.
+     */
+    friend bool ancestor(const digraph<T>& tree, int u, int v) {
+        if (u == v) {
+            return true;
+        }
+
+        for (int w : tree.succ.at(u)) {
+            if (ancestor(tree, w, v)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 };
 
-
-// to_adjacency_list:
-//   - takes a digraph and a verte to name map (std::map<int, int>) and returns a string
 
 template <class T>
 std::string to_adjacency_list(const digraph<T>& G, const std::map<int, int>& vertex_map) {
@@ -177,7 +191,6 @@ std::pair<digraph<int>, std::map<int, int>> parse_adjacency_list(const std::stri
     file.close();
     return std::make_pair(g, vertex_map);
 }
-
 /*
  * Generates a random integer in the range [a, b].
  */
@@ -197,7 +210,7 @@ int rand_int(std::ranlux48_base& gen, int a, int b) {
  * Warning: The graph must be strongly connected.
  */
 template <class T>
-std::pair<digraph<T>, int> sample_random_spanning_tree(const digraph<T> &G, std::ranlux48_base& gen) {
+std::pair<digraph<T>, int> sample_random_spanning_tree(const digraph<T> &G, std::ranlux48_base& gen, int root = -1) {
     digraph<T> spanning_tree;
     for (int u : G.nodes()) {
         spanning_tree.add_vertex(G[u].data);
@@ -206,7 +219,10 @@ std::pair<digraph<T>, int> sample_random_spanning_tree(const digraph<T> &G, std:
     std::vector<int> next(G.nodes().size(), -1);
     std::vector<bool> in_tree(G.nodes().size(), false);
 
-    int root = rand_int(gen, 0, G.nodes().size() - 1);
+    if (root == -1) {
+        root = rand_int(gen, 0, G.nodes().size() - 1);
+    }
+
     in_tree[root] = true;
     for (int u : G.nodes()) {
         if (in_tree[u]) continue;
