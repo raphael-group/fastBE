@@ -105,34 +105,9 @@ public:
 };
 
 PiecewiseLinearF compute_minimizer(const PiecewiseLinearF& f) {
-    if (std::all_of(f.slopes.begin(), f.slopes.end(), [](double slope) { return slope <= 0; })) {
-        if (f.slopes.size() == 1) {
-            return PiecewiseLinearF(f.slopes, f.intercept + f.slopes[0]);
-        }
-        return PiecewiseLinearF(std::vector<double>(f.slopes.begin() + 1, f.slopes.end()), f.intercept + f.slopes[0]);
-    }
-
-    auto greater_equal_zero = [](double slope) { return slope >= 0; };
-    auto zero = [](double slope) { return slope == 0; };
-
-    auto jl_iter = std::find_if(f.slopes.begin(), f.slopes.end(), greater_equal_zero);
-    int jl = std::distance(f.slopes.begin(), jl_iter);
-
-    if (jl == 0) {
-        std::vector<double> new_slopes = f.slopes;
-        new_slopes.insert(new_slopes.begin(), 0.0);
-        return PiecewiseLinearF(new_slopes, f.intercept);
-    }
-
-    auto jh_iter = std::find_if(f.slopes.begin(), f.slopes.end(), zero);
-    int jh = (jh_iter != f.slopes.end()) ? std::distance(f.slopes.begin(), jh_iter) : jl;
-
-    std::vector<double> new_slopes(f.slopes.size() + 1);
-    std::copy(f.slopes.begin() + 1, f.slopes.begin() + jl, new_slopes.begin());
-    std::fill(new_slopes.begin() + jl - 1, new_slopes.begin() + jh + 1, 0.0);
-    std::copy(f.slopes.begin() + jh, f.slopes.end(), new_slopes.begin() + jh + 1);
-
-    return PiecewiseLinearF(new_slopes, f.intercept + f.slopes[0]);
+    PiecewiseLinearF g = f;
+    g.compute_minimizer();
+    return g;
 }
 
 #endif

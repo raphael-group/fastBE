@@ -8,7 +8,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wno-unused-parameter")
-set(CMAKE_CXX_FLAGS_DEBUG "-g --coverage")
+set(CMAKE_CXX_FLAGS_DEBUG "-g -pg --coverage")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 project(vafpp VERSION 1.0)

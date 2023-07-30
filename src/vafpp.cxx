@@ -8,6 +8,7 @@
 #include <digraph.hpp>
 #include <piecewiselinearf.hpp>
 
+#include <unordered_map>
 #include <random>
 #include <chrono>
 #include <functional>
@@ -49,6 +50,13 @@ struct clone_tree_vertex {
     clone_tree_vertex() : id(-1), valid(false) {}
 };
 
+/*
+ * Converts a clone tree with integer vertex labels to a clone tree
+ * with clone_tree_vertex vertex labels.
+ *
+ * To be used to avoid recomputation when calling `one_vafpp` multiple 
+ * times with perturbations of the same clone tree.
+ */
 digraph<clone_tree_vertex> convert_clone_tree(const digraph<int>& clone_tree, size_t nrows) {
     digraph<clone_tree_vertex> new_clone_tree;
     for (size_t node_id = 0; node_id < clone_tree.nodes().size(); ++node_id) {
@@ -93,25 +101,6 @@ void subtree_prune_and_regraft(digraph<clone_tree_vertex>& tree, int u, int v, i
 }
 
 /*
- * Stochastically perturbs the clone tree by performing random
- * subtree prune and regraft operations.
- */
-void perturb(digraph<clone_tree_vertex>& tree, int root, std::ranlux48_base& gen, int iters) {
-    while (iters > 0) {
-        int u = rand_int(gen, 0, tree.nodes().size() - 1);
-        int v = rand_int(gen, 0, tree.nodes().size() - 1);
-
-        if (u == v || u == root || ancestor(tree, u, v)) {
-            continue; 
-        }
-
-        int parent = *tree.predecessors(u).begin();
-        subtree_prune_and_regraft(tree, u, v, root);
-        --iters;
-    }
-}
-
-/*
  * Given a frequency matrix $F$ and a clone tree $T$, this function
  * finds the minimizing value of $$\sum_{i=1}^m\lVert F_i - (UB)_i \rVert_1$$ 
  * over all usage matrices in $\mathcal{O}(mn^2)$ using dynamic programming 
@@ -129,7 +118,7 @@ void perturb(digraph<clone_tree_vertex>& tree, int root, std::ranlux48_base& gen
 */
 double one_vafpp(
     digraph<clone_tree_vertex>& clone_tree, 
-    const std::map<int, int>& vertex_map, 
+    const std::unordered_map<int, int>& vertex_map, 
     const std::vector<std::vector<double>>& F, 
     int root
 ) {
@@ -189,7 +178,6 @@ double one_vafpp(
     }
 
     return -1 * obj;
-
 }
 
 /*
@@ -204,7 +192,7 @@ double one_vafpp(
  *    vertices of the clone tree.
  *  - F: A frequency matrix represented as a 2D vector.
 */
-double one_vafpp(const digraph<int>& clone_tree, const std::map<int, int>& vertex_map, const std::vector<std::vector<double>>& F, int root) {
+double one_vafpp(const digraph<int>& clone_tree, const std::unordered_map<int, int>& vertex_map, const std::vector<std::vector<double>>& F, int root) {
     size_t nrows = F.size();
     size_t ncols = F[0].size();
 
@@ -246,9 +234,9 @@ double one_vafpp(const digraph<int>& clone_tree, const std::map<int, int>& verte
 }
 
 /* 
- * Performs a stochastic hill climbing search to minimize the 
- * reconstruction error of the clone tree by using random subtree
- * prune and regraft operations.
+ * Performs hill climbing search to minimize the reconstruction error 
+ * of the clone tree by using subtree prune and regraft operations. 
+ * Stops when no SPR operation improves the reconstruction error.
  *
  * Input:
  * - clone_tree: A clone tree represented as a digraph.
@@ -256,41 +244,9 @@ double one_vafpp(const digraph<int>& clone_tree, const std::map<int, int>& verte
  *   vertices of the clone tree.
  * - F: A frequency matrix represented as a 2D vector.
  * - root: The root of the clone tree.
- * - gen: A random number generator.
- * - max_iters: The maximum number of iterations to perform without 
- *   improvement.
  */
-void hill_climb(
-    digraph<clone_tree_vertex>& clone_tree, const std::map<int, int>& vertex_map, 
-    const std::vector<std::vector<double>>& F, int root, 
-    std::ranlux48_base& gen, int max_iters
-) {
-    float best_score = std::numeric_limits<float>::max();
-    int num_iters_no_improvement = 0;
-    while (num_iters_no_improvement < max_iters) {
-        int u = rand_int(gen, 0, clone_tree.nodes().size() - 1);
-        int v = rand_int(gen, 0, clone_tree.nodes().size() - 1);
-
-        if (u == v || u == root || v == root || ancestor(clone_tree, u, v)) {
-            continue; 
-        }
-
-        int parent = *clone_tree.predecessors(u).begin();
-        subtree_prune_and_regraft(clone_tree, u, v, root);
-
-        float score = one_vafpp(clone_tree, vertex_map, F, root);
-        if (score < best_score) {
-            best_score = score;
-            num_iters_no_improvement = 0;
-        } else {
-            num_iters_no_improvement++;
-            subtree_prune_and_regraft(clone_tree, u, parent, root);
-        }
-    }
-}
-
 void deterministic_hill_climb(
-    digraph<clone_tree_vertex>& clone_tree, const std::map<int, int>& vertex_map, 
+    digraph<clone_tree_vertex>& clone_tree, const std::unordered_map<int, int>& vertex_map, 
     const std::vector<std::vector<double>>& F, int root
 ) {
     while (true) {
@@ -322,7 +278,6 @@ void deterministic_hill_climb(
         subtree_prune_and_regraft(clone_tree, best_move.first, best_move.second, root);
     }
 }
-
 
 /* 
  * This function parses a frequency matrix from a text file and returns it as a 2D vector.
@@ -418,66 +373,34 @@ void perform_search(argparse::ArgumentParser search) {
     std::random_device rd;
     std::ranlux48_base gen(rd());
 
-    std::map<int, int> identity_map;
+    std::unordered_map<int, int> identity_map;
     for (size_t i = 0; i < ncols; ++i) {
         identity_map[i] = i;
     }
 
     /* Run N seed iterations and select top K trees as
      * candidates for hill climbing. */
-    std::vector<std::pair<digraph<clone_tree_vertex>, float>> candidate_trees;
-    for (size_t i = 0; i < search.get<size_t>("iterations"); i++) {
+    std::pair<digraph<clone_tree_vertex>, float> best_tree = std::make_pair(digraph<clone_tree_vertex>(), std::numeric_limits<float>::max());
+    for (size_t i = 0; i < search.get<size_t>("samples"); i++) {
         auto [clone_tree_int, root] = sample_random_spanning_tree(complete_graph, gen, 0);
+
         digraph<clone_tree_vertex> clone_tree = convert_clone_tree(clone_tree_int, nrows);
-        //hill_climb(clone_tree, identity_map, frequency_matrix, 0, gen, 1000);
         deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root);
         float obj = one_vafpp(clone_tree, identity_map, frequency_matrix, root);
-        spdlog::info("Seed iteration {}, Objective value: {}", i, obj);
-        if (candidate_trees.size() < 5) {
-            candidate_trees.push_back(std::make_pair(clone_tree, obj));
-        } else {
-            std::sort(candidate_trees.begin(), candidate_trees.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
-            if (obj < candidate_trees.back().second) {
-                candidate_trees.back() = std::make_pair(clone_tree, obj);
-            }
+
+        spdlog::info("Random sample iteration {}, Objective value: {}", i, obj);
+        if (obj < best_tree.second) {
+            best_tree = std::make_pair(clone_tree, obj);
         }
     }
 
-    int num_no_improvement = 0;
-    while (num_no_improvement < 5) {
-        spdlog::info("Starting iteration {}.", num_no_improvement);
-        spdlog::info("Candidate tree objectives:");
-        for (const auto& [tree, obj] : candidate_trees) {
-            spdlog::info("{}", obj);
-        }
-
-        const auto& [clone_tree, obj] = candidate_trees[rand_int(gen, 0, candidate_trees.size() - 1)];
-        digraph<clone_tree_vertex> clone_tree_copy = clone_tree;
-
-        perturb(clone_tree_copy, 0, gen, 500);
-        // hill_climb(clone_tree_copy, identity_map, frequency_matrix, 0, gen, 1000);
-        deterministic_hill_climb(clone_tree_copy, identity_map, frequency_matrix, 0);
-
-        float new_obj = one_vafpp(clone_tree_copy, identity_map, frequency_matrix, 0);
-        if (new_obj < obj) {
-            spdlog::info("Found new best tree with objective value {}.", new_obj);
-            num_no_improvement = 0;
-            std::sort(candidate_trees.begin(), candidate_trees.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
-            candidate_trees.pop_back();
-
-            candidate_trees.push_back(std::make_pair(clone_tree_copy, new_obj));
-        } else {
-            num_no_improvement++;
-        }
-    }
-
-    digraph<clone_tree_vertex> min_tree = candidate_trees[0].first;
-    float min_obj = candidate_trees[0].second;
+    digraph<clone_tree_vertex> min_tree = best_tree.first;
+    float min_obj = best_tree.second;
 
     std::string adjacency_list = to_adjacency_list(min_tree, identity_map);
 
     std::ofstream adj_output(search.get<std::string>("output") + "_tree.txt");
-    adj_output << adjacency_list << std::endl;
+    adj_output << adjacency_list;
 
     json output;
     output["objective_value"] = min_obj;
@@ -531,15 +454,15 @@ int main(int argc, char *argv[])
           .help("prefix of the output files")
           .required();
 
-    search.add_argument("-a", "--aggression")
-          .help("aggression of stochastic perturbation in (0, infinity)")
-          .default_value(1.0)
-          .scan<'g', double>();
-
-    search.add_argument("-i", "--iterations")
-          .help("number of iterations to perform without improvement before stopping")
+    search.add_argument("-s", "--samples")
+          .help("number of random samples to use for hill climbing")
           .default_value((size_t) 100)
           .scan<'u', size_t>();
+
+    search.add_argument("-r", "--random-seed") // TODO: get working
+          .help("random seed")
+          .default_value(0)
+          .scan<'d', int>();
 
     program.add_subparser(search);
     program.add_subparser(regress);

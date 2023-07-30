@@ -1,11 +1,11 @@
 #ifndef _DIGRAPH_H
 #define _DIGRAPH_H
 
+#include <unordered_map>
 #include <random>
 #include <utility>
 #include <vector>
 #include <set>
-#include <map>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -31,10 +31,10 @@ class digraph {
 private:
     int id_counter = 0;
 
-    std::map<int, std::set<int>> succ;
-    std::map<int, std::set<int>> pred;
+    std::unordered_map<int, std::set<int>> succ;
+    std::unordered_map<int, std::set<int>> pred;
 
-    std::map<int, vertex<T>> vertices;
+    std::unordered_map<int, vertex<T>> vertices;
 public:
     // returns id of created vertex
     int add_vertex(T data) {
@@ -135,7 +135,7 @@ public:
 };
 
 template <class T>
-std::string to_adjacency_list(const digraph<T>& G, const std::map<int, int>& vertex_map) {
+std::string to_adjacency_list(const digraph<T>& G, const std::unordered_map<int, int>& vertex_map) {
     std::stringstream ss;
     for (const auto& u : G.nodes()) {
         ss << vertex_map.at(u) << " ";
@@ -151,12 +151,12 @@ std::string to_adjacency_list(const digraph<T>& G, const std::map<int, int>& ver
  * Parses an adjacency list into a directed graph object, 
  * where the vertices are read in as integers.
  */
-std::pair<digraph<int>, std::map<int, int>> parse_adjacency_list(const std::string& filename) {
+std::pair<digraph<int>, std::unordered_map<int, int>> parse_adjacency_list(const std::string& filename) {
     digraph<int> g;
 
     std::ifstream file(filename);
     std::string line;
-    std::map<int, int> vertex_map;
+    std::unordered_map<int, int> vertex_map;
 
     if (!file.is_open()) {
         throw std::runtime_error("Could not open file " + filename);
@@ -190,6 +190,7 @@ std::pair<digraph<int>, std::map<int, int>> parse_adjacency_list(const std::stri
     file.close();
     return std::make_pair(g, vertex_map);
 }
+
 /*
  * Generates a random integer in the range [a, b].
  */
