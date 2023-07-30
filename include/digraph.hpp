@@ -134,7 +134,6 @@ public:
     }
 };
 
-
 template <class T>
 std::string to_adjacency_list(const digraph<T>& G, const std::map<int, int>& vertex_map) {
     std::stringstream ss;

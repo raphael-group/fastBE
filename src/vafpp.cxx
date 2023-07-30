@@ -68,29 +68,45 @@ digraph<clone_tree_vertex> convert_clone_tree(const digraph<int>& clone_tree, si
  * Prunes the subtree rooted at vertex u and regrafts as a child of 
  * vertex v. This function assumes that u is not the root of the tree.
  */
-template <class T>
-void subtree_prune_and_regraft(digraph<T>& tree, int u, int v) {
+void subtree_prune_and_regraft(digraph<clone_tree_vertex>& tree, int u, int v, int root) {
     int parent = *tree.predecessors(u).begin();
     tree.remove_edge(parent, u);
     tree.add_edge(v, u);
+
+    std::stack<int> s;
+    s.push(u);
+    s.push(parent);
+
+    // walk from vertices u and v to root and update valid flags
+    while (!s.empty()) {
+        int node_id = s.top();
+        s.pop();
+
+        tree[node_id].data.valid = false;
+
+        if (node_id == root) continue;
+
+        int parent = *tree.predecessors(node_id).begin();
+        s.push(parent);
+    }
+
 }
 
 /*
  * Stochastically perturbs the clone tree by performing random
  * subtree prune and regraft operations.
  */
-template <class T>
-void perturb(digraph<T>& tree, int root, std::ranlux48_base& gen, int iters) {
+void perturb(digraph<clone_tree_vertex>& tree, int root, std::ranlux48_base& gen, int iters) {
     while (iters > 0) {
         int u = rand_int(gen, 0, tree.nodes().size() - 1);
         int v = rand_int(gen, 0, tree.nodes().size() - 1);
 
-        if (u == v || u == root || v == root || ancestor(tree, u, v)) {
+        if (u == v || u == root || ancestor(tree, u, v)) {
             continue; 
         }
 
         int parent = *tree.predecessors(u).begin();
-        subtree_prune_and_regraft(tree, u, v);
+        subtree_prune_and_regraft(tree, u, v, root);
         --iters;
     }
 }
@@ -245,7 +261,7 @@ double one_vafpp(const digraph<int>& clone_tree, const std::map<int, int>& verte
  *   improvement.
  */
 void hill_climb(
-    digraph<int>& clone_tree, const std::map<int, int>& vertex_map, 
+    digraph<clone_tree_vertex>& clone_tree, const std::map<int, int>& vertex_map, 
     const std::vector<std::vector<double>>& F, int root, 
     std::ranlux48_base& gen, int max_iters
 ) {
@@ -260,7 +276,7 @@ void hill_climb(
         }
 
         int parent = *clone_tree.predecessors(u).begin();
-        subtree_prune_and_regraft(clone_tree, u, v);
+        subtree_prune_and_regraft(clone_tree, u, v, root);
 
         float score = one_vafpp(clone_tree, vertex_map, F, root);
         if (score < best_score) {
@@ -268,10 +284,45 @@ void hill_climb(
             num_iters_no_improvement = 0;
         } else {
             num_iters_no_improvement++;
-            subtree_prune_and_regraft(clone_tree, u, parent);
+            subtree_prune_and_regraft(clone_tree, u, parent, root);
         }
     }
 }
+
+void deterministic_hill_climb(
+    digraph<clone_tree_vertex>& clone_tree, const std::map<int, int>& vertex_map, 
+    const std::vector<std::vector<double>>& F, int root
+) {
+    while (true) {
+        float best_score = one_vafpp(clone_tree, vertex_map, F, root);
+        std::pair<int, int> best_move = {-1, -1};
+        for (auto u : clone_tree.nodes()) { // quadratic iteration complexity: okay?
+            for (auto v : clone_tree.nodes()) {
+                if (u == v || u == root || ancestor(clone_tree, u, v)) {
+                    continue; 
+                }
+
+                int parent = *clone_tree.predecessors(u).begin();
+                subtree_prune_and_regraft(clone_tree, u, v, root);
+
+                float score = one_vafpp(clone_tree, vertex_map, F, root);
+                subtree_prune_and_regraft(clone_tree, u, parent, root);
+
+                if (score < best_score) {
+                    best_score = score;
+                    best_move = {u, v};
+                } 
+            }
+        }
+
+        if (best_move.first == -1) {
+            break;
+        }
+
+        subtree_prune_and_regraft(clone_tree, best_move.first, best_move.second, root);
+    }
+}
+
 
 /* 
  * This function parses a frequency matrix from a text file and returns it as a 2D vector.
@@ -374,13 +425,15 @@ void perform_search(argparse::ArgumentParser search) {
 
     /* Run N seed iterations and select top K trees as
      * candidates for hill climbing. */
-    std::vector<std::pair<digraph<int>, float>> candidate_trees;
+    std::vector<std::pair<digraph<clone_tree_vertex>, float>> candidate_trees;
     for (size_t i = 0; i < search.get<size_t>("iterations"); i++) {
-        auto [clone_tree, root] = sample_random_spanning_tree(complete_graph, gen, 0);
-        hill_climb(clone_tree, identity_map, frequency_matrix, 0, gen, 1000);
+        auto [clone_tree_int, root] = sample_random_spanning_tree(complete_graph, gen, 0);
+        digraph<clone_tree_vertex> clone_tree = convert_clone_tree(clone_tree_int, nrows);
+        //hill_climb(clone_tree, identity_map, frequency_matrix, 0, gen, 1000);
+        deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root);
         float obj = one_vafpp(clone_tree, identity_map, frequency_matrix, root);
         spdlog::info("Seed iteration {}, Objective value: {}", i, obj);
-        if (candidate_trees.size() < 10) {
+        if (candidate_trees.size() < 5) {
             candidate_trees.push_back(std::make_pair(clone_tree, obj));
         } else {
             std::sort(candidate_trees.begin(), candidate_trees.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
@@ -391,7 +444,7 @@ void perform_search(argparse::ArgumentParser search) {
     }
 
     int num_no_improvement = 0;
-    while (num_no_improvement < 25) {
+    while (num_no_improvement < 5) {
         spdlog::info("Starting iteration {}.", num_no_improvement);
         spdlog::info("Candidate tree objectives:");
         for (const auto& [tree, obj] : candidate_trees) {
@@ -399,10 +452,11 @@ void perform_search(argparse::ArgumentParser search) {
         }
 
         const auto& [clone_tree, obj] = candidate_trees[rand_int(gen, 0, candidate_trees.size() - 1)];
-        digraph<int> clone_tree_copy = clone_tree;
+        digraph<clone_tree_vertex> clone_tree_copy = clone_tree;
 
-        perturb(clone_tree_copy, 0, gen, 1000);
-        hill_climb(clone_tree_copy, identity_map, frequency_matrix, 0, gen, 1000);
+        perturb(clone_tree_copy, 0, gen, 500);
+        // hill_climb(clone_tree_copy, identity_map, frequency_matrix, 0, gen, 1000);
+        deterministic_hill_climb(clone_tree_copy, identity_map, frequency_matrix, 0);
 
         float new_obj = one_vafpp(clone_tree_copy, identity_map, frequency_matrix, 0);
         if (new_obj < obj) {
@@ -417,7 +471,7 @@ void perform_search(argparse::ArgumentParser search) {
         }
     }
 
-    digraph<int> min_tree = candidate_trees[0].first;
+    digraph<clone_tree_vertex> min_tree = candidate_trees[0].first;
     float min_obj = candidate_trees[0].second;
 
     std::string adjacency_list = to_adjacency_list(min_tree, identity_map);
