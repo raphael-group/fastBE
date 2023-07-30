@@ -332,7 +332,6 @@ void perform_regression(argparse::ArgumentParser regress) {
 
     auto start = std::chrono::high_resolution_clock::now();
     double obj = one_vafpp(clone_tree, vertex_map, frequency_matrix, 0);
-
     for (size_t i = 0; i < regress.get<size_t>("num_reps") - 1; ++i) {
         one_vafpp(clone_tree, vertex_map, frequency_matrix, 0);
     }
@@ -370,28 +369,49 @@ void perform_search(argparse::ArgumentParser search) {
         }
     }
 
-    std::random_device rd;
-    std::ranlux48_base gen(rd());
 
     std::unordered_map<int, int> identity_map;
     for (size_t i = 0; i < ncols; ++i) {
         identity_map[i] = i;
     }
 
-    /* Run N seed iterations and select top K trees as
-     * candidates for hill climbing. */
+    /* Draw N random spanning trees from the complete graph and then
+     * perform hill climbing on each of them. */
+    std::mutex mtx;
+    std::atomic<size_t> counter(0);
+
+    size_t num_samples = search.get<size_t>("samples");
+    unsigned int num_threads = search.get<unsigned int>("threads");
+    std::vector<std::thread> threads(num_threads);
+
     std::pair<digraph<clone_tree_vertex>, float> best_tree = std::make_pair(digraph<clone_tree_vertex>(), std::numeric_limits<float>::max());
-    for (size_t i = 0; i < search.get<size_t>("samples"); i++) {
-        auto [clone_tree_int, root] = sample_random_spanning_tree(complete_graph, gen, 0);
+    for (auto& th : threads) {
+        th = std::thread([&]() {
+            while (true) {
+                std::random_device rd;
+                std::ranlux48_base gen(rd());
+                size_t i = counter++;
+                if (i >= num_samples) return;  // no more work to do
 
-        digraph<clone_tree_vertex> clone_tree = convert_clone_tree(clone_tree_int, nrows);
-        deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root);
-        float obj = one_vafpp(clone_tree, identity_map, frequency_matrix, root);
+                auto [clone_tree_int, root] = sample_random_spanning_tree(complete_graph, gen, 0);
 
-        spdlog::info("Random sample iteration {}, Objective value: {}", i, obj);
-        if (obj < best_tree.second) {
-            best_tree = std::make_pair(clone_tree, obj);
-        }
+                digraph<clone_tree_vertex> clone_tree = convert_clone_tree(clone_tree_int, nrows);
+                deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root);
+                float obj = one_vafpp(clone_tree, identity_map, frequency_matrix, root);
+
+                {
+                    std::lock_guard<std::mutex> lock(mtx);  // lock the mutex to protect shared resources
+                    spdlog::info("Random sample iteration {}, Objective value: {}", i, obj);
+                    if (obj < best_tree.second) {
+                        best_tree = std::make_pair(clone_tree, obj);
+                    }
+                }
+            }
+        });
+    }
+
+    for (auto& th : threads) {
+        th.join();  // wait for all threads to finish
     }
 
     digraph<clone_tree_vertex> min_tree = best_tree.first;
@@ -463,6 +483,11 @@ int main(int argc, char *argv[])
           .help("random seed")
           .default_value(0)
           .scan<'d', int>();
+
+    search.add_argument("-t", "--threads")
+          .help("number of threads to use")
+          .default_value(std::thread::hardware_concurrency())
+          .scan<'u', unsigned int>();
 
     program.add_subparser(search);
     program.add_subparser(regress);
