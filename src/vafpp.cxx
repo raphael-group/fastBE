@@ -275,6 +275,7 @@ void deterministic_hill_climb(
             break;
         }
 
+        spdlog::info("Best score is {}", best_score);
         subtree_prune_and_regraft(clone_tree, best_move.first, best_move.second, root);
     }
 }
@@ -357,18 +358,33 @@ void perform_search(argparse::ArgumentParser search) {
     size_t nrows = frequency_matrix.size();
     size_t ncols = frequency_matrix[0].size();
 
-    digraph<int> complete_graph;
+    double ancestry_threshold = search.get<double>("ancestry_threshold");
+    digraph<int> ancestry_graph;
     for (size_t i = 0; i < ncols; ++i) {
-        complete_graph.add_vertex(i);
+        ancestry_graph.add_vertex(i);
     }
 
+    size_t num_edges = 0;
     for (size_t i = 0; i < ncols; ++i) {
         for (size_t j = 0; j < ncols; ++j) {
             if (i == j) continue;
-            complete_graph.add_edge(i, j);
+
+            bool to_add = true;
+            for (size_t k = 0; k < nrows; ++k) {
+                // violates ancestry condition if the frequency of i is less than the frequency of j
+                if (frequency_matrix[k][i] <= frequency_matrix[k][j] - ancestry_threshold) {
+                    to_add = false;
+                }
+            }
+
+            if (to_add) {
+                ancestry_graph.add_edge(i, j);
+                ++num_edges;
+            }
         }
     }
 
+    spdlog::info("Number of edges in ancestry graph: {}", num_edges);
 
     std::unordered_map<int, int> identity_map;
     for (size_t i = 0; i < ncols; ++i) {
@@ -393,7 +409,7 @@ void perform_search(argparse::ArgumentParser search) {
                 size_t i = counter++;
                 if (i >= num_samples) return;  // no more work to do
 
-                auto [clone_tree_int, root] = sample_random_spanning_tree(complete_graph, gen, 0);
+                auto [clone_tree_int, root] = sample_random_spanning_tree(ancestry_graph, gen, 0);
 
                 digraph<clone_tree_vertex> clone_tree = convert_clone_tree(clone_tree_int, nrows);
                 deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root);
@@ -488,6 +504,11 @@ int main(int argc, char *argv[])
           .help("number of threads to use")
           .default_value(std::thread::hardware_concurrency())
           .scan<'u', unsigned int>();
+
+    search.add_argument("-a", "--ancestry_threshold")
+          .help("ancestry threshold")
+          .default_value(0.10)
+          .scan<'f', double>();
 
     program.add_subparser(search);
     program.add_subparser(regress);

@@ -126,3 +126,7 @@ temp
 plugins-prod
 sandbox
 wave-tests
+
+dependencies/*
+dependencies/**/*
+
