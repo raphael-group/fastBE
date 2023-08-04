@@ -2,12 +2,13 @@ params.proj_dir      = "/n/fs/ragr-research/projects/vafpp"
 params.sim_script    = "${params.proj_dir}/scripts/simulation.py"
 params.python_script = "${params.proj_dir}/scripts/vafpp_lp.py"
 params.cpp_command   = "${params.proj_dir}/build/src/vafpp"
+params.outputDir     = "/n/fs/ragr-research/projects/vafpp/nextflow_results/"
 
-params.nmutations = [500, 1000, 2000, 4000]
-params.nclones    = [250, 500, 750, 1000]
-params.nsamples   = [50, 100, 200, 500]
+params.nmutations = [20, 60, 100, 200]
+params.nclones    = [10, 30, 50, 100]
+params.nsamples   = [3, 10, 25, 50, 100]
 params.seeds      = [0, 1, 2, 3, 4, 5]
-params.coverage   = [50]
+params.coverage   = [100]
 
 process create_sim {
     cpus 1
@@ -27,39 +28,20 @@ process create_sim {
     """
 }
 
-process regress_python {
-    cpus 4
-    memory '32 GB'
-    time '59m'
-    errorStrategy 'ignore'
-
-    input:
-        tuple path(clonal_matrix), path(mut_clone_mapping), path(freq_matrix), path(total_matrix),
-              path(clone_tree), path(usage_matrix), path(variant_matrix), val(id)
-
-    output:
-        tuple file("python_results.json"), val(id)
-
-    """
-    module load gurobi
-    python '${params.python_script}' --tree ${clone_tree} --frequency-matrix ${freq_matrix} --output python
-    """
-}
-
-process regress_cpp {
-    cpus 1
+process infer_cpp {
+    cpus 16
     memory '2 GB'
-    time '59m'
+    time '24h'
 
     input:
         tuple path(clonal_matrix), path(mut_clone_mapping), path(freq_matrix), path(total_matrix),
               path(clone_tree), path(usage_matrix), path(variant_matrix), val(id)
 
     output:
-        tuple file("cpp_results.json"), val(id)
+        tuple file("inferred_tree.txt"), file("inferred_results.json"), val(id)
 
     """
-    '${params.cpp_command}' regress ${clone_tree} ${freq_matrix} --output cpp
+    '${params.cpp_command}' search ${freq_matrix} -a 0.15 -s 200 --output inferred -t ${task.cpus}
     """
 }
 
@@ -74,15 +56,9 @@ workflow {
       it[0] >= 2*it[2] // require twice as many mutations as clones
     }
 
-    simulation =  parameter_channel | create_sim 
-    cpp_res = simulation | regress_cpp
-    // py_res  = simulation | regress_python
-
-    cpp_res.collectFile{["${it[1]}_cpp_results.json", it[0]]}.subscribe {
-      println "A result is saved to $it"
+    create_sim([50, 10, 10, 100, 0]) | infer_cpp | map { inferred_tree, inferred_results, id ->
+        outputPrefix = "${params.outputDir}/cpp/${id}"
+        inferred_tree.moveTo("${outputPrefix}_inferred_tree.txt")
+        inferred_results.moveTo("${outputPrefix}_inferred_results.json")
     }
-
-    // py_res.collectFile{["${it[1]}_python_results.json", it[0]]}.subscribe {
-      // println "A result is saved to $it"
-    // }
 }

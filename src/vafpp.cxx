@@ -310,7 +310,7 @@ std::vector<std::vector<double>> parse_frequency_matrix(const std::string& filen
         double value;
 
         while (iss >> value) {
-            row.push_back(2 * value); // since we are using VAFs, we need to multiply by to ensure objective value is correct
+            row.push_back(value);
         }
 
         if (matrix.empty()) {
