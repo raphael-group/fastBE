@@ -58,6 +58,7 @@ if __name__ == "__main__":
     with open(f"{args.output}_params.json", 'w') as f:
         data = {
             "samples": samples,
-            "clusters": clones_to_mutations
+            "clusters": clones_to_mutations,
+            "garbage": []
         }
         f.write(json.dumps(data))
