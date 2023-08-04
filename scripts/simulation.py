@@ -96,8 +96,9 @@ def simulate_read_counts(usage_matrix, clonal_matrix, mutation_to_clone_mapping,
                     total_count_matrix[s, mutation_to_clone_mapping[mutation]],
                     F[s, mutation_to_clone_mapping[mutation]]
             )
-            variant_count_matrix[s, mutation] = f
+            variant_count_matrix[s, mutation_to_clone_mapping[mutation]] = f
 
+    assert np.all(variant_count_matrix <= total_count_matrix)
     return variant_count_matrix, total_count_matrix
 
 def observe_frequency_matrix(variant_count_matrix, total_count_matrix, mutation_to_clone_mapping, num_clones):
