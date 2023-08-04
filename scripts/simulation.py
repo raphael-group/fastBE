@@ -93,10 +93,11 @@ def simulate_read_counts(usage_matrix, clonal_matrix, mutation_to_clone_mapping,
     for mutation in range(num_mutations):
         for s in range(usage_matrix.shape[0]):
             f = binom.rvs(
-                    total_count_matrix[s, mutation_to_clone_mapping[mutation]],
+                    total_count_matrix[s, mutation],
                     F[s, mutation_to_clone_mapping[mutation]]
             )
-            variant_count_matrix[s, mutation_to_clone_mapping[mutation]] = f
+            # there could be a bug here...
+            variant_count_matrix[s, mutation] = f
 
     assert np.all(variant_count_matrix <= total_count_matrix)
     return variant_count_matrix, total_count_matrix

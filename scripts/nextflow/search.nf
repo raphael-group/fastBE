@@ -7,8 +7,8 @@ params.outputDir     = "/n/fs/ragr-research/projects/vafpp/nextflow_results/"
 params.pairtree_bin  = "${params.proj_dir}/dependencies/pairtree/bin/pairtree"
 
 params.nmutations = [20, 60, 100, 200]
-params.nclones    = [10, 30, 50, 100]
-params.nsamples   = [3, 10, 25, 50, 100]
+params.nclones    = [5, 10, 30, 50]
+params.nsamples   = [10, 25, 50, 100]
 params.seeds      = [0, 1, 2, 3, 4, 5]
 params.coverage   = [100]
 
@@ -43,7 +43,7 @@ process allele_minima {
         tuple file("inferred_tree.txt"), file("inferred_results.json"), val(id)
 
     """
-    '${params.allele_minima}' search ${freq_matrix} -a 0.15 -s 500 --output inferred -t ${task.cpus}
+    '${params.allele_minima}' search ${freq_matrix} -a 1 -s 500 --output inferred -t ${task.cpus}
     """
 }
 
@@ -98,7 +98,7 @@ workflow {
     file("${params.outputDir}/ground_truth/").mkdirs()
 
     // run simulation
-    simulation = create_sim([50, 10, 10, 100, 0])
+    simulation = parameter_channel | create_sim
 
     // save ground truth
     simulation | map { 
