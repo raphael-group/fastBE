@@ -16,6 +16,7 @@ process create_sim {
     cpus 1
     memory '4 GB'
     time '59m'
+    errorStrategy 'ignore'
 
     input:
         tuple val(mutations), val(samples), val(clones), val(coverage), val(seed)
@@ -34,6 +35,7 @@ process allele_minima {
     cpus 16
     memory '2 GB'
     time '24h'
+    errorStrategy 'ignore'
 
     input:
         tuple path(clonal_matrix), path(mut_clone_mapping), path(freq_matrix), path(total_matrix),
@@ -68,6 +70,7 @@ process pairtree {
     cpus 16
     memory '8 GB'
     time '24h'
+    errorStrategy 'ignore'
 
     input:
         tuple file(ssm), file(params_json), val(id)

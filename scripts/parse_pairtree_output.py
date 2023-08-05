@@ -1,12 +1,11 @@
 import numpy as np
-
 import argparse
 
 def convert_parents_to_adjmatrix(parents):
-  K = len(parents) + 1
-  adjm = np.eye(K)
-  adjm[parents,np.arange(1, K)] = 1
-  return adjm
+    K = len(parents) + 1
+    adjm = np.eye(K)
+    adjm[parents,np.arange(1, K)] = 1
+    return adjm
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Parse pairtree output')
@@ -16,6 +15,7 @@ if __name__ == '__main__':
 
     result = np.load(args.result)
     best_tree_adj = convert_parents_to_adjmatrix(result['struct'][0])
+    best_tree_adj = best_tree_adj[1:, 1:]
 
     adjacency_list = [[] for _ in range(best_tree_adj.shape[0])]
     for i in range(best_tree_adj.shape[0]):
