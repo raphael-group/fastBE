@@ -23,8 +23,8 @@ def get_relations(tree):
 if __name__ == "__main__":
     args = parse_args()
 
-    true_tree = nx.read_adjlist(args.true_tree)
-    inferred_tree = nx.read_adjlist(args.inferred_tree)
+    true_tree = nx.read_adjlist(args.true_tree, create_using=nx.DiGraph)
+    inferred_tree = nx.read_adjlist(args.inferred_tree, create_using=nx.DiGraph)
         
     true_relations = get_relations(true_tree)
     inferred_relations = get_relations(inferred_tree)
