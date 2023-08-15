@@ -26,7 +26,7 @@ def simulate_clonal_tree(m, n):
         tree.add_node(i)
         tree.add_edge(parent, i)
 
-    # TODO: ensure that every node has at least one mutation
+    # Ensures that every node has at least one mutation
     remaining_nodes = list(range(n))
     for i in range(n):
         node = np.random.choice(list(remaining_nodes))

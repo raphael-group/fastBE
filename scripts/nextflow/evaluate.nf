@@ -18,13 +18,13 @@ process EvaluateTrees {
     errorStrategy 'ignore'
 
     input:
-        tuple val(algo), val(name), path(ground_truth), path(inferred_tree)
+        tuple val(algo), val(name), path(ground_truth), path(usage_matrix), path(inferred_tree)
 
     output:
         tuple path("result.json"), val(algo), val(name)
 
     """
-    python ${params.root_dir}/scripts/score_result.py $ground_truth $inferred_tree > result.json
+    python ${params.root_dir}/scripts/score_result.py $ground_truth $usage_matrix $inferred_tree -o result.json
     """
 }
 
@@ -37,8 +37,9 @@ workflow {
     eval_channel = algorithms_ch.combine(ground_truth_trees_ch).map { 
         algo = it[0]
         ground_truth_tree = "${params.root_dir}/${params.ground_truth_dir}/${it[3]}_tree.txt"
+        ground_truth_U    = "${params.root_dir}/${params.ground_truth_dir}/${it[3]}_usage_matrix.txt"
         inferred_tree = "${params.root_dir}/${it[1]}/${it[3]}${it[2]}"
-        [algo, it[3], ground_truth_tree, inferred_tree]
+        [algo, it[3], ground_truth_tree, ground_truth_U, inferred_tree]
     }
 
     eval_channel | EvaluateTrees | map { result, algo, name ->
