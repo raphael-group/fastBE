@@ -24,7 +24,7 @@ process create_sim {
     output:
         tuple file("sim_clonal_matrix.txt"), file("sim_mutation_to_clone_mapping.txt"), file("sim_obs_frequency_matrix.txt"), 
               file("sim_total_matrix.txt"), file("sim_tree.txt"), file("sim_usage_matrix.txt"), file("sim_variant_matrix.txt"),
-              val("m${mutations}_n${clones}_s${samples}_c${coverage}_r${seed}")
+              val(clones), val("m${mutations}_n${clones}_s${samples}_c${coverage}_r${seed}")
 
     """
     python '${params.sim_script}' --mutations ${mutations} --samples ${samples} --clones ${clones} --coverage ${coverage} --seed ${seed} --output sim
@@ -39,7 +39,7 @@ process allele_minima {
 
     input:
         tuple path(clonal_matrix), path(mut_clone_mapping), path(freq_matrix), path(total_matrix),
-              path(clone_tree), path(usage_matrix), path(variant_matrix), val(id)
+              path(clone_tree), path(usage_matrix), path(variant_matrix), val(clones), val(id)
 
     output:
         tuple file("inferred_tree.txt"), file("inferred_results.json"), val(id)
@@ -56,13 +56,13 @@ process create_pairtree_input {
 
     input:
         tuple path(clonal_matrix), path(mut_clone_mapping), path(freq_matrix), path(total_matrix),
-              path(clone_tree), path(usage_matrix), path(variant_matrix), val(id)
+              path(clone_tree), path(usage_matrix), path(variant_matrix), val(clones), val(id)
 
     output:
         tuple file("pairtree_mutations.ssm"), file("pairtree_params.json"), val(id)
 
     """
-    python '${params.pairtree_input_script}' ${variant_matrix} ${total_matrix} ${mut_clone_mapping} -o pairtree
+    python '${params.pairtree_input_script}' ${variant_matrix} ${total_matrix} ${mut_clone_mapping} -n $clones -o pairtree
     """
 }
 
@@ -106,7 +106,7 @@ workflow {
     // save ground truth
     simulation | map { 
         clonal_matrix, mut_clone_mapping, freq_matrix, total_matrix,
-        clone_tree, usage_matrix, variant_matrix, id ->
+        clone_tree, usage_matrix, variant_matrix, clones, id ->
         
         outputPrefix = "${params.outputDir}/ground_truth/${id}"
         clonal_matrix.copyTo("${outputPrefix}_clonal_matrix.txt")
