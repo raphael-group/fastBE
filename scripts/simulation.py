@@ -81,7 +81,11 @@ Simulate a mutation read counts from a clonal matrix, usage matrix and
 a mapping from mutations to clone.
 """
 def simulate_read_counts(usage_matrix, clonal_matrix, mutation_to_clone_mapping, num_mutations, coverage):
-    F = 0.5 * usage_matrix @ clonal_matrix
+    F = usage_matrix @ clonal_matrix
+
+    # Clamp to [0, 1] for floating point errors
+    F[F < 0] = 0
+    F[F > 1] = 1
     
     variant_count_matrix = np.zeros((usage_matrix.shape[0], num_mutations))
     total_count_matrix   = np.zeros((usage_matrix.shape[0], num_mutations))
@@ -89,11 +93,13 @@ def simulate_read_counts(usage_matrix, clonal_matrix, mutation_to_clone_mapping,
     for mutation in range(num_mutations):
         for s in range(usage_matrix.shape[0]):
             f = binom.rvs(
-                    total_count_matrix[s, mutation_to_clone_mapping[mutation]],
+                    total_count_matrix[s, mutation],
                     F[s, mutation_to_clone_mapping[mutation]]
             )
+            # there could be a bug here...
             variant_count_matrix[s, mutation] = f
 
+    assert np.all(variant_count_matrix <= total_count_matrix)
     return variant_count_matrix, total_count_matrix
 
 def observe_frequency_matrix(variant_count_matrix, total_count_matrix, mutation_to_clone_mapping, num_clones):

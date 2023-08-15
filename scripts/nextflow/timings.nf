@@ -76,13 +76,13 @@ workflow {
 
     simulation =  parameter_channel | create_sim 
     cpp_res = simulation | regress_cpp
-    py_res  = simulation | regress_python
+    // py_res  = simulation | regress_python
 
     cpp_res.collectFile{["${it[1]}_cpp_results.json", it[0]]}.subscribe {
       println "A result is saved to $it"
     }
 
-    py_res.collectFile{["${it[1]}_python_results.json", it[0]]}.subscribe {
-      println "A result is saved to $it"
-    }
+    // py_res.collectFile{["${it[1]}_python_results.json", it[0]]}.subscribe {
+      // println "A result is saved to $it"
+    // }
 }
