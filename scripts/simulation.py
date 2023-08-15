@@ -16,15 +16,28 @@ Output:
       'mutation' attribute of the nodes.
 """
 def simulate_clonal_tree(m, n):
+    assert m >= n
+
     tree = nx.DiGraph()
-    tree.add_node(0, mutation=[0]) # ensure root has at least one mutation
+    tree.add_node(0) 
 
     for i in range(1, n):
         parent = np.random.choice(np.arange(i))
         tree.add_node(i)
         tree.add_edge(parent, i)
 
-    for i in range(1, m):
+    # TODO: ensure that every node has at least one mutation
+    remaining_nodes = list(range(n))
+    for i in range(n):
+        node = np.random.choice(list(remaining_nodes))
+        remaining_nodes.remove(node)
+
+        if 'mutation' not in tree.nodes[node]:
+            tree.nodes[node]['mutation'] = []
+
+        tree.nodes[node]['mutation'].append(i)
+
+    for i in range(n, m):
         node = np.random.choice(np.arange(n))
 
         if 'mutation' not in tree.nodes[node]:
@@ -134,6 +147,8 @@ def main():
     parser.add_argument('--seed', type=int, default=0, help='Random seed.')
 
     args = parser.parse_args()
+
+    assert args.mutations >= args.clones, 'Number of mutations must be greater than or equal to number of clones.'
 
     np.random.seed(args.seed)
 
