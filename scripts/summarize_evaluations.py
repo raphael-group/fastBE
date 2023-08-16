@@ -20,6 +20,9 @@ def load_files(directory):
                 negatives = content['pairwise_relations']['negatives']
                 false_positives = content['pairwise_relations']['false_positives']
                 false_negatives = content['pairwise_relations']['false_negatives']
+                U_error = content["frequency_matrix"]["U_error"]
+                F_error = content["frequency_matrix"]["F_error"]
+
 
                 row = {
                     'algorithm': algorithm,
@@ -33,7 +36,9 @@ def load_files(directory):
                     'positives': positives,
                     'negatives': negatives,
                     'false_positives': false_positives,
-                    'false_negatives': false_negatives
+                    'false_negatives': false_negatives,
+                    'U_error': U_error,
+                    'F_error': F_error
                 }
                 data.append(row)
 
