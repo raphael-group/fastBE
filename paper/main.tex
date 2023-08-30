@@ -3,13 +3,14 @@
 % Order is important in package loading
 % Load math packages and set margins
 \usepackage[margin=1in]{geometry} 
-\usepackage{amsmath, amsthm, amssymb, amsfonts}
+\usepackage{amsmath, amsthm, amssymb, amsfonts, mathtools}
 \usepackage{fancyhdr, color, comment, graphicx, environ, bbm}
 \usepackage{multirow}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
 \renewcommand{\algorithmicensure}{\textbf{Output:}}
 
+\usepackage{relsize}
 \usepackage{capt-of}
 \usepackage{longtable}
 \usepackage{parskip}
@@ -43,6 +44,7 @@
 \usepackage[subpreambles=false]{standalone}
 \usepackage{placeins}
 \usepackage{svg}
+\usepackage{authblk}
 
 \usepackage{tikz}
 \usepackage{tikz-qtree}
@@ -98,26 +100,35 @@
 
 \newcommand{\henri}[1]{\textcolor{blue}{[#1]}}
 \newcommand{\tree}{\mathcal{T}}
+\newcommand{\Rplus}{\protect\hspace{-.1em}\protect\raisebox{.35ex}{\smaller{\smaller\textbf{+}}}}
+\newcommand{\Cpp}{\mbox{C\Rplus\Rplus}\xspace}
+\newcommand{\defeq}{\vcentcolon=}
+\newcommand{\eqdef}{=\vcentcolon}
 
 \usepackage{todonotes}
 
 \title{
-    A regression based approach to phylogenetic reconstruction 
+    A novel regression based approach to phylogenetic reconstruction 
     from multi-sample bulk DNA sequencing of tumors
 }
-\author{Henri Schmidt}
+\author[1]{Henri Schmidt}
+\author[1,$\dagger$]{Benjamin J. Raphael}
+\affil[1]{Department of Computer Science, Princeton University, NJ, USA}
+\affil[$\dagger$]{Correspondence: braphael@princeton.edu}
 \date{\today}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-    Bulk DNA sequencing of multiple cancer patient tissues provides the opportunity to 
+    \textbf{Motivation:} Bulk DNA sequencing of multiple cancer patient tissues provides the opportunity to 
     investigate and reconstruct the phylogeny of patient tumors. However, as 
     bulk DNA sequencing of tumor tissue captures thousands of cells from a heterogenous 
     mixture of distinct subpopulations, accurate reconstruction of the tumor phylogeny
     requires simultaneous deconvolutiona and inference of ancestral relationships, leading
-    to computationally challenging optimization problems. Here, we develop a new
+    to computationally challenging optimization problems. 
+
+    \textbf{Results:} Here, we develop a new
     approach to phylogenetic reconstruction from multi-sample bulk DNA sequencing data by 
     studying a thus far ignored regression sub-problem, hidden within the phylogenetic
     reconstruction task. In particular, we derive a new algorithm for the 
@@ -126,9 +137,13 @@
     over state-of-the-art algorithms. Using our algorithm for this regression sub-problem,
     we develop a strikingly simple method for phylogenetic inference from multi-sample bulk 
     DNA sequencing data, \ourmethod, which accurately reconstructs tumor phylogenies 
-    using up to hundreds of samples containing dozens of distinct sub-populations. Finally, we
+    using up to hundreds of samples containing dozens of distinct sub-populations. We
     demonstrate that on both simulated and real data, \ourmethod outperforms existing approaches
     in terms of its ability to scale to hundreds of samples and reconstruction accuracy.
+
+    \textbf{Availability:} \ourmethod is implemented in \Cpp and is available at: \url{github.com/schmidt73/vafpp_opt}. 
+    Our fast regression algorithm is available as a header-only library for \Cpp with
+    bindings to Python.
 \end{abstract}
 
 % ABSTRACT DRAFT #1:
@@ -149,6 +164,7 @@
 %   problem using techniques from stochastic optimization, which outperform existing approaches
 %   in terms of both speed and accuracy, on simulated data.
 
+\newpage
 \section{Background}
 
 In this section, we describe the model of cancer evolution that is widely used 
@@ -159,20 +175,18 @@ the evolution of cancer proceeds by the accumulation of somatic, single-nucleoti
 mutations starting with a single, founder cell. 
 In this model, subpopulations of cells with identical genotypes are referred to as \emph{clones}.
 Importantly, we assume that each \emph{genomic locus} is mutated exactly
-once during this evolutionary process, an assumption known as the \emph{infinite sites assumption}. We
-represent the state of a genomic locus with a binary $\{0, 1\}$ variable, where a $0$ represents the absence 
-of a mutation and $1$ represents the presence of a mutation. Thus, the genotype of a clone is binary vector 
-$\{0, 1\}^n$, where $n$ is the total number of genomic loci.
+once during this evolutionary process, an assumption known as the \emph{infinite sites assumption} \henri{cite}. We
+represent the presence or absence of a mutation in a genomic locus with a binary $\{0, 1\}$ variable. The 
+genotype of a clone is then a binary vector $\{0, 1\}^n$, where $n$ is the total number of genomic loci.
 
 Under these assumptions, the evolutionary history of a tumor is described as a rooted, phylogenetic tree 
-where vertices correspond to clones and edges their ancestral 
+where vertices correspond to clones and edges correspond to ancestral 
 relationships. The root of this tree is the founder cell, which contains a single mutated locus. 
 Each edge of this tree is labeled by exactly one mutation, and this mutation is represented by its 
-position $i$ in the genome. More formally, we represent the evolutionary history of a tumor by an 
-\emph{$n$-clonal tree} \cite{el-kebir_reconstruction_2015}, which is defined as 
-follows.
+position $i \in [n]$ in the genome. More formally, we represent the evolutionary history of a tumor by an 
+\emph{$n$-clonal tree}, which is defined as follows.
 
-\begin{definition}
+\begin{definition}[\cite{el-kebir_reconstruction_2015}]
   A rooted tree $\,\tree = (V, E)$ on $n$ vertices is an $n$-clonal tree 
   for a mutation set $[n] = \{1, \ldots, n\}$ if each edge is
   labeled by exactly one mutation in $[n]$ and no mutation appears
@@ -183,21 +197,24 @@ The root $r(\tree)$ of a clonal tree $\tree$ is assigned the unique
 mutation that does not appear as a label on any edge and is denoted
 $r$ when the tree is clear by context. The vertices and edges of $\tree$ are denoted as $V(\tree)$ and $E(\tree)$.
 The parent of a non-root, vertex $i$ in $V(\tree)$ is written as $\delta(i)$ and the set of children of a vertex $i$ 
-is written as $C(i)$. Associated with any $n$-clonal tree is an \emph{$n$-clonal matrix} \cite{el-kebir_reconstruction_2015}, 
+is written as $C(i)$. Associated with any $n$-clonal tree is an \emph{$n$-clonal matrix}
 which describes the genotype of each clone. 
 
-\begin{definition}
+\begin{definition}[\cite{el-kebir_reconstruction_2015}]
     An $n$-by-$n$ binary matrix $\,B = B_{\tree}$ is the unique, $n$-clonal matrix associated with $\tree$ 
   if and only if $B_{i, j} = 1$ when $i$ is a descendant of $j$ in $\tree$ or 
   $i = j$.
 \end{definition}
 
-The model of bulk DNA sequencing that is used is then quite simple: each of $m$ samples 
+The model of bulk DNA sequencing is then as follows: each of $m$ samples 
 consists of a mixture of distinct clones and the sequencing experiment measures the 
 frequency of all mutations in this mixture. More formally, it is assumed that 
-each of the $m$ measurements $f_i \in \mathbb{R}^n$ are \emph{convex combinations} of the clones
+each of the $m$ measurements $f_i \in \mathbb{R}^n$ are \emph{convex combinations} \henri{cite} of the clones
 in $\tree$. That is,
-\[f_i = u_{i,1}b_1 + u_{i,2}b_2 + \cdots + u_{i,n}b_n \quad\text{where}\quad u_{i, j} \geq 0 \quad\text{and}\quad \sum_{j=1}^nu_{i, j} \leq 1,\]
+\begin{equation}
+    \label{eq:dna_seq_model}
+f_i = u_{i,1}b_1 + u_{i,2}b_2 + \cdots + u_{i,n}b_n \quad\text{where}\quad u_{i, j} \geq 0 \quad\text{and}\quad \sum_{j=1}^nu_{i, j} \leq 1,
+\end{equation}
 where $b_i$ corresponds to the genotype of clone $i$ in the clonal tree $\tree$ associated with $B$.
 This model is often summarized compactly in matrix notation as $F = UB$, where $F = [f_i]$ and $U = [u_i]$ are $m$-by-$n$ matrices, 
 $f_{i,j}$ is the frequency of mutation $j$ in sample $i$, and $u_{i,j}$ is the fraction of clone $j$ in sample $i$. As such, we
@@ -205,82 +222,87 @@ call $F$ a \emph{frequency matrix} and any right stochastic matrix $U$ a \emph{u
 
 Under this model, the problem of reconstructing the evolutionary history of the tumor
 becomes equivalent to factoring the observed frequency matrix $F$ into its constituents $U$ and $B$.
-The \emph{variant allele frequency deconvolution problem} \cite{el-kebir_reconstruction_2015}
-is one such formalism of this correspondence: given the observed frequency matrix $F$, 
-the problem asks to find a usage matrix $U$ and a clonal matrix $B$ such that $F = UB$, or determine
-if no such matrices exist. Unfortunately, the variant allele frequency deconvolution problem is 
-NP-complete \cite{el-kebir_reconstruction_2015}, which is not too surprising as it is a difficult 
-deconvolution problem over the discrete space of trees.
-
-Here, we pose a generalization of the variant allele frequency deconvolution problem.
-That is, rather than require that $F = UB$, we formalize the reconstruction problem as
-requiring that the error $\epsilon := F - UB$ be small. This approach has
-a couple of advantages: \textit{i)} real data contains error and it may not be possible to reconstruct
-$F$ exactly and \textit{ii)} it allows for a notion of an approximate solution. This is also what is sometimes done in practice: 
-e.g. AncesTree \cite{el-kebir_reconstruction_2015} relaxes the hard requirement that $F = UB$ and 
-adds an $\ell_1$ regularization term $\lVert \epsilon \rVert_1$ to the objective.  
-This is also the variant of the problem studied in CITUP \cite{malikic_clonality_2015}, which aims to 
-minimize the $\ell_2$ objective $\lVert \epsilon \rVert_2$. 
+In its most general form, we have a loss function $L(F, U, B)$ that provides a measure of error 
+between the observed frequency matrix $F$ and the inferred matrices $U$ and $B$.
 
 \begin{problem}
   \label{prob:vafp}
-  Given a frequency matrix $F$, \emph{variant allele frequency $\ell_p$-deconvolution problem} ($\ell_p$-VAFDP) is to
-  find a both a usage matrix $U$ and a clonal matrix $B$ such that 
-  \begin{equation}
-    \sum_{i=1}^m\lVert F_i - (UB)_i \rVert_p
-  \end{equation}
-  is minimized.
+  Given a frequency matrix $F$, \emph{variant allele frequency deconvolution problem} ($L$-VAFDP) is to
+  find both a usage matrix $U$ and a clonal matrix $B$ such that the loss $L(F, U, B)$ is minimized.
 \end{problem}
 
-Of course, the computational hardness of the VAF deconvolution problem immediately implies the hardness of 
-$\ell_p$-VAFDP since for any $\ell_p$-norm, the minimizer is zero if and only if $F = UB$. However, we 
-again emphasize that a not insignificant notion of approximation appears when formalizing the problem in this 
-manner. That is, rather than hoping for a perfect reconstruction, we accept one that is ``good enough.''
-
 The main focus of this work is the regression problem that appears when the
-clonal matrix $B$ (equivalently, the clonal tree $\tree$) is fixed. Specifically,
-when $B$ is fixed, the problem reduces to finding a right stochastic matrix $U$
-that minimizes $\lVert F - UB\lVert_p$ for some $\ell_p$-norm. For both the $\ell_1$ and $\ell_2$ norms, 
-it is immediately apparent that this regression problem is solveable in polynomial time. 
-More formally, since right stochasticity is enforcable by a set of linear constraints on the matrix $U$,
-the $\ell_1$ and $\ell_2$ regression problems can be formulated as linear and quadratic programs, 
-which are solveable in polynomial time \henri{cite}. 
+clonal matrix $B$ is fixed. Specifically, when $B$ is fixed, the problem reduces to finding a 
+right stochastic matrix $U$ such that the loss $L(F, U, B)$ is minimized. 
 
 \begin{problem}
   \label{prob:vafpp}
   Given a frequency matrix $F$ and a clonal matrix $B$, the 
-  \emph{variant allele frequency $\ell_p$-regression problem} ($\ell_p$-VAFRP) is to
-  find a usage matrix $U$ such that 
-  \begin{equation}
-    \sum_{i=1}^m\lVert F_i - (UB)_i \rVert_p
-  \end{equation}
-  is minimized.
+  \emph{variant allele frequency $L$-regression problem} ($L$-VAFRP) is to
+  find a usage matrix $U$ such that the loss $L(F, U, B)$ is minimized.
 \end{problem}
 
-\henri{describe this better}
-Throughout the remainder of the paper, we will work with the special case of 
-the $\ell_p$-VAFRP where the number of samples $m = 1$. This is sufficient because both the objective 
-function and the constraints on $U$ are separable in the coordinate 
-$i$. Thus, we will refer to both $U$ and $F$ as row vectors, denoted as $u^T$ and $f^T$ 
+In the special case where the loss $L_p(F, U, B) \defeq \sum_{i=1}^m\lVert F_i - (UB)_i \rVert_p$ for $p \in \{1, 2\}$,
+it is immediately apparent that this regression problem is solveable in polynomial time. 
+More formally, since right stochasticity is enforcable by a set of linear constraints \eqref{eq:dna_seq_model} on the matrix $U$,
+the $L_1$ and $L_2$ regression problems can be formulated as linear and quadratic programs, 
+which are solveable in polynomial time \henri{cite}. Throughout the remainder of this work,
+we will focus on the $L_1$ regression and deconvolution problems, which we call the 
+\emph{variant allele frequency $\ell_1$-regression problem} ($\ell_1$-VAFRP) and 
+\emph{variant allele frequency $\ell_1$-deconvolution problem} ($\ell_1$-VAFDP)
 respectively.
 
-\henri{move into this}
-Despite solving $\ell_p$-VAFRP in polynomial time for $p \in \{1, 2\}$, blackbox techniques based on 
+\section{Related Work}
+
+Various formulations of the variant allele frequency deconvolution problem have been 
+studied in the literature, and can be described in terms of their loss function $L(F, U, B)$.
+The first such work, CITUP \cite{malikic_clonality_2015}, jointly clusters mutations and 
+infers a phylogeny, using a regularized $L_2$ loss to avoid overfitting on the number
+of mutation clusters. They provides an exact algorithm to solve this problem based 
+off exhaustive enumeration of clonal trees and quadratic integer programming \henri{cite}. 
+AncesTree \cite{el-kebir_reconstruction_2015} on the other hand, does not cluster mutations, 
+and studies several different loss functions. The first loss they study 
+is the $0$-$1$ loss $L(F, U, B) = \mathbbm{1}(F \neq UB)$, 
+which is zero if and only if $F = UB$. Interestingly, they show that under this loss function,
+the variant allele frequency deconvolution problem is NP-complete, which implies that it is also
+NP-complete under any $L_p$ loss. As real data is quite noisy, they 
+also study a variant of the $L_1$ loss obtained from adding the hard constraint 
+that $\lvert F_{ij} - (UB)_{ij}\rvert \leq \epsilon_{i,j}$ for some $\epsilon > 0$. For both
+loss functions, they use an integer linear programming formulation \henri{cite} to solve the 
+problem exactly. CALDER \cite{myers_calder_2019} builds off of the approach of AncesTree,
+but adds an additional hard constraint that the inferred matrices $U$ and $B$ are 
+\emph{longitudinally consistent}, leveraging the temporal information present in certain
+experimental settings. Further, rather than minimizing the $L_1$ loss, they minimize the 
+$L_0$ loss on the usage matrix $U$. Again, they utilize integer linear programming
+to solve this optimization problem exactly.
+
+
+Blackbox techniques for solving linear and quadratic programming problems solve the variant allele frequency
+$\ell_p$-regression problems in polynomial time for $p \in \{1, 2\}$. However, 
 linear and quadratic programming are still quite slow. For example, given a generic linear programming
 problem of the form $\min_{Ax \leq b, x \geq 0} c^Tx$, with $n$ variables and $d$ constraints, the fastest
 algorithm non-algebraic method \cite{cohen2021solving} takes 
-$\mathcal{O}^*\left(\sqrt{d}\cdot\text{nnz}(A)+d^{2.5}\right)$ time \cite{lee2014path, lee2015efficient}. 
-However, the linear programming formulation of $1$-VAFRP contains $n$ variables and 
+$\mathcal{O}^*(d^{1/2}\cdot\text{nnz}(A)+d^{5/2})$ \footnote{\text{nnz}(A) is the number of non-zeros entries in the 
+    matrix $A$ and $\mathcal{O}^*$ hides polylogarithmic factors in $n$ and $d$.} time \cite{lee2014path, lee2015efficient}. 
+However, the linear programming formulation of $\ell_1$-VAFRP contains $n$ variables and 
 $d = \mathcal{O}(n)$ constraints when $m = 1$, which implies that the fastest, non-algebraic method for this due to 
-Vaidya \cite{vaidya1987algorithm, vaidya1996new}, takes $\mathcal{O}(n^{2.5})$ time. While algebraic methods
+Vaidya \cite{vaidya1987algorithm, vaidya1996new}, takes $\mathcal{O}(n^{5/2})$ time. While algebraic methods
 for matrix multiplication can boost the performance to $\mathcal{O}^*(n^{\omega})$ time where $\omega$ is
-the matrix multiplication constant \cite{cohen2021solving}, which is currently $\omega \sim 2.37$ 
-\cite{alman2021refined}. Further, the techniques for achieving this speedup, called the ``laser method,'' contain
-impractically large constant factors \henri{cite} and are not used in practice, and instead rely on Strassen's algorithm \henri{cite}.
-Finally, current state-of-the-art linear programming 
-solvers \henri{cite gurobi and cplex} still employ classical algorithms such
+the matrix multiplication constant \cite{cohen2021solving}, currently $\omega \sim 2.37$ 
+\cite{alman2021refined}, the techniques for achieving this speedup contain
+impractically large constant factors \henri{cite} and are not used in practice.
+Instead, current state-of-the-art linear programming solvers \henri{cite} still employ classical algorithms such
 as the simplex \henri{cite} and barrier \henri{cite} methods, many of which have exponential time 
 worst case behavior.
+
+
+
+% \henri{where does this go? also, describe this better}
+% Throughout the remainder of the paper, we will work with the special case of 
+% the $\ell_p$-VAFRP where the number of samples $m = 1$. This is sufficient because both the objective 
+% function and the constraints on $U$ are separable in the coordinate 
+% $i$. Thus, we will refer to both $U$ and $F$ as row vectors, denoted as $u^T$ and $f^T$ 
+% respectively.
 
 \section{Theory}
 Thus far, the main theoretical focus in inferring tumor phylogenies from bulk DNA sequencing data 
@@ -532,7 +554,7 @@ when the root vertex $i$ is assigned the label $\psi$. Then, $g_{i}(\psi)$ satis
 \begin{align}
     g_{i}(\psi) &= \psi\cdot w_i + \max_{\substack{\lvert \psi_j - \psi \rvert \leq 1,\\\psi_j \geq 0}} \left\{\sum_{j \in C(i)} g_{j}(\psi_j)\right\} &&\text{by definition,} \nonumber\\
                 &= \psi\cdot w_i + \sum_{j \in C(i)}\max_{\substack{\lvert \psi_j - \psi \rvert \leq 1,\\\psi_j \geq 0}} g_{j}(\psi_j) &&\text{by separability,} \nonumber\\
-                &= \psi\cdot w_i + \sum_{j \in C(i)}h_j(\psi), &&\text{by defining } h_j(\psi) := \max_{\substack{\lvert \psi_j - \psi \rvert \leq 1,\\\psi_j \geq 0}} g_{j}(\psi_j).
+                &= \psi\cdot w_i + \sum_{j \in C(i)}h_j(\psi), &&\text{by defining } h_j(\psi) \defeq \max_{\substack{\lvert \psi_j - \psi \rvert \leq 1,\\\psi_j \geq 0}} g_{j}(\psi_j).
 \end{align}
 Importantly, to solve the dot product tree labeling problem, it is necessary and sufficient 
 to compute $\max_{\psi \geq 0}g_r(\psi)$ for the root vertex $r = r(\tree)$. Unfortunately, however,
@@ -566,7 +588,7 @@ We start with the following description of $h_j$ in terms of $g_j$.
 Let $f$ be represented by the tuple $(y, s_1, s_2, \ldots, s_{k + 1})$. 
 Let $i^*$ be the largest index $i$ such that $s_i \geq 0$. If $\,s_i < 0$ for all $i$, we set $i^* = -\infty$ and 
 if $\,s_i \geq 0$ for all $i$, we set $i^* = \infty$. Then,
-\[h(\psi) := \max_{\substack{\lvert \psi' - \psi \rvert \leq 1,\\\psi' \geq 0}} f(\psi')\] is the concave
+\[h(\psi) \defeq \max_{\substack{\lvert \psi' - \psi \rvert \leq 1,\\\psi' \geq 0}} f(\psi')\] is the concave
 piecewise linear function
 \begin{equation}
     \label{eq:h_form}
@@ -583,7 +605,7 @@ follows.
     \label{prop:h_form}
     Let $f$ be represented by the tuple $(y, s_1, s_2, \ldots, s_{k + 1})$. Let $i^*$ be the largest index $i$ such that $s_i \geq 0$. 
     If $\,s_i < 0$ for all $i$, we set $i^* = -\infty$ and if $\,s_i \geq 0$ for all $i$, we set $i^* = \infty$.
-    Then, \[h(\psi) := \max_{\substack{\lvert \psi' - \psi \rvert \leq 1,\\\psi' \geq 0}} f(\psi')\]
+    Then, \[h(\psi) \defeq \max_{\substack{\lvert \psi' - \psi \rvert \leq 1,\\\psi' \geq 0}} f(\psi')\]
     is represented by the tuple
     \begin{align*}
         (y + s_1, s_2, s_3, \ldots, s_k) \qquad&\text{if } i^* = \infty,\\
