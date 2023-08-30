@@ -72,6 +72,7 @@
   citecolor=blue
 }
 
+\newcommand{\ourmethod}{\textit{AlleleMinima}\xspace}
 \renewcommand{\algorithmicensure}{\textbf{Output:}}
 \usepackage{thmtools}
 \usepackage{thm-restate}
@@ -100,7 +101,10 @@
 
 \usepackage{todonotes}
 
-\title{An ultrafast algorithm for the $\ell_1$ VAF regression problem}
+\title{
+    A regression based approach to phylogenetic reconstruction 
+    from multi-sample bulk DNA sequencing of tumors
+}
 \author{Henri Schmidt}
 \date{\today}
 
@@ -109,22 +113,41 @@
 
 \begin{abstract}
     Bulk DNA sequencing of multiple cancer patient tissues provides the opportunity to 
-    investigate the evolutionary history of patient tumors. However, as bulk DNA sequencing
-    of tumor tissue captures thousands of cells from a heterogenous mixture of 
-    distinct subpopulations, deconvolution is first necessary to accurately infer the 
-    evolutionary history. The standard approach to this deconvolution problem is to 
-    factor the observed variant allele frequency (VAF) matrix into a
-    clonal matrix and a matrix specifying the fraction of the subpopulations in each sample. 
-    Here, we study a related regression problem, the $\ell_1$ VAF regression problem, that appears 
-    when the clonal matrix is fixed. By exploiting the structure of the clonal
-    matrix, we solve the $\ell_1$ VAF regression problem with expected time complexity
-    $\mathcal{O}(n^{3/2})$, where $n$ is the size of the clonal tree corresponding to 
-    the clonal matrix. We show that our algorithm outperforms blackbox approaches based on
-    linear programming (LP) for this problem, even when using state of the art LP solvers such
-    as Gurobi and CPLEX. Finally, we use our algorithm to develop a new approach to the deconvolution
-    problem using techniques from stochastic optimization, which outperform existing approaches
-    in terms of both speed and accuracy, on simulated data.
+    investigate and reconstruct the phylogeny of patient tumors. However, as 
+    bulk DNA sequencing of tumor tissue captures thousands of cells from a heterogenous 
+    mixture of distinct subpopulations, accurate reconstruction of the tumor phylogeny
+    requires simultaneous deconvolutiona and inference of ancestral relationships, leading
+    to computationally challenging optimization problems. Here, we develop a new
+    approach to phylogenetic reconstruction from multi-sample bulk DNA sequencing data by 
+    studying a thus far ignored regression sub-problem, hidden within the phylogenetic
+    reconstruction task. In particular, we derive a new algorithm for the 
+    regression sub-problem by exploiting the unique, combinatorial structure of the matrices
+    appearing within the regression, obtaining both asymptotic and empirical improvements
+    over state-of-the-art algorithms. Using our algorithm for this regression sub-problem,
+    we develop a strikingly simple method for phylogenetic inference from multi-sample bulk 
+    DNA sequencing data, \ourmethod, which accurately reconstructs tumor phylogenies 
+    using up to hundreds of samples containing dozens of distinct sub-populations. Finally, we
+    demonstrate that on both simulated and real data, \ourmethod outperforms existing approaches
+    in terms of its ability to scale to hundreds of samples and reconstruction accuracy.
 \end{abstract}
+
+% ABSTRACT DRAFT #1:
+%   Bulk DNA sequencing of multiple cancer patient tissues provides the opportunity to 
+%   investigate the evolutionary history of patient tumors. However, as bulk DNA sequencing
+%   of tumor tissue captures thousands of cells from a heterogenous mixture of 
+%   distinct subpopulations, deconvolution is first necessary to accurately infer the 
+%   evolutionary history. The standard approach to this deconvolution problem is to 
+%   factor the observed variant allele frequency (VAF) matrix into a
+%   clonal matrix and a matrix specifying the fraction of the subpopulations in each sample. 
+%   Here, we study a related regression problem, the $\ell_1$ VAF regression problem, that appears 
+%   when the clonal matrix is fixed. By exploiting the structure of the clonal
+%   matrix, we solve the $\ell_1$ VAF regression problem with expected time complexity
+%   $\mathcal{O}(n^{3/2})$, where $n$ is the size of the clonal tree corresponding to 
+%   the clonal matrix. We show that our algorithm outperforms blackbox approaches based on
+%   linear programming (LP) for this problem, even when using state of the art LP solvers such
+%   as Gurobi and CPLEX. Finally, we use our algorithm to develop a new approach to the deconvolution
+%   problem using techniques from stochastic optimization, which outperform existing approaches
+%   in terms of both speed and accuracy, on simulated data.
 
 \section{Background}
 
@@ -201,7 +224,7 @@ minimize the $\ell_2$ objective $\lVert \epsilon \rVert_2$.
 
 \begin{problem}
   \label{prob:vafp}
-  Given a frequency matrix $F$, \emph{variant allele frequency $p$-deconvolution problem} ($p$-VAFDP) is to
+  Given a frequency matrix $F$, \emph{variant allele frequency $\ell_p$-deconvolution problem} ($\ell_p$-VAFDP) is to
   find a both a usage matrix $U$ and a clonal matrix $B$ such that 
   \begin{equation}
     \sum_{i=1}^m\lVert F_i - (UB)_i \rVert_p
@@ -210,14 +233,14 @@ minimize the $\ell_2$ objective $\lVert \epsilon \rVert_2$.
 \end{problem}
 
 Of course, the computational hardness of the VAF deconvolution problem immediately implies the hardness of 
-$p$-VAFDP since for any $p$-norm, the minimizer is zero if and only if $F = UB$. However, we 
+$\ell_p$-VAFDP since for any $\ell_p$-norm, the minimizer is zero if and only if $F = UB$. However, we 
 again emphasize that a not insignificant notion of approximation appears when formalizing the problem in this 
 manner. That is, rather than hoping for a perfect reconstruction, we accept one that is ``good enough.''
 
 The main focus of this work is the regression problem that appears when the
 clonal matrix $B$ (equivalently, the clonal tree $\tree$) is fixed. Specifically,
 when $B$ is fixed, the problem reduces to finding a right stochastic matrix $U$
-that minimizes $\lVert F - UB\lVert_p$ for some $p$-norm. For both the $\ell_1$ and $\ell_2$ norms, 
+that minimizes $\lVert F - UB\lVert_p$ for some $\ell_p$-norm. For both the $\ell_1$ and $\ell_2$ norms, 
 it is immediately apparent that this regression problem is solveable in polynomial time. 
 More formally, since right stochasticity is enforcable by a set of linear constraints on the matrix $U$,
 the $\ell_1$ and $\ell_2$ regression problems can be formulated as linear and quadratic programs, 
@@ -226,7 +249,7 @@ which are solveable in polynomial time \henri{cite}.
 \begin{problem}
   \label{prob:vafpp}
   Given a frequency matrix $F$ and a clonal matrix $B$, the 
-  \emph{variant allele frequency $p$-regression problem} ($p$-VAFRP) is to
+  \emph{variant allele frequency $\ell_p$-regression problem} ($\ell_p$-VAFRP) is to
   find a usage matrix $U$ such that 
   \begin{equation}
     \sum_{i=1}^m\lVert F_i - (UB)_i \rVert_p
@@ -236,13 +259,13 @@ which are solveable in polynomial time \henri{cite}.
 
 \henri{describe this better}
 Throughout the remainder of the paper, we will work with the special case of 
-the $p$-VAFRP where the number of samples $m = 1$. This is sufficient because both the objective 
+the $\ell_p$-VAFRP where the number of samples $m = 1$. This is sufficient because both the objective 
 function and the constraints on $U$ are separable in the coordinate 
 $i$. Thus, we will refer to both $U$ and $F$ as row vectors, denoted as $u^T$ and $f^T$ 
 respectively.
 
 \henri{move into this}
-Despite solving $p$-VAFRP in polynomial time for $p \in \{1, 2\}$, blackbox techniques based on 
+Despite solving $\ell_p$-VAFRP in polynomial time for $p \in \{1, 2\}$, blackbox techniques based on 
 linear and quadratic programming are still quite slow. For example, given a generic linear programming
 problem of the form $\min_{Ax \leq b, x \geq 0} c^Tx$, with $n$ variables and $d$ constraints, the fastest
 algorithm non-algebraic method \cite{cohen2021solving} takes 
@@ -270,8 +293,9 @@ characterization of the variant allele frequency $\ell_1$-regression problem, wh
 emphasizes the tree structure inherent in the problem. Finally, we use our
 characterization to design an efficient algorithm for the variant allele 
 frequency $\ell_1$-regression problem, providing the main theoretical result of 
-our work, as stated below.
-\begin{restatable}{theorem}{ell1polytime}
+our work, as stated below. 
+\begin{restatable}{theorem}{ellonepolytime}
+    \label{thm:ellonepolytime}
     Given a clonal tree $\tree$ with $n$ vertices and a frequency vector $f \in \mathbb{R}^n$, the
     minimum of 
     \[\left\lVert f - u^T B_{\tree}\right\rVert_1 \]
@@ -285,6 +309,9 @@ However, for reasonable classes of trees, the complexity is much better. For exa
 diameter of a spanning tree drawn uniformly at random from the complete graph $K_n$ is 
 of order $\sqrt{n}$ -- similar bounds can also be derived 
 for the random spanning trees of an arbitrary graph $G$ \cite{renyi_height_1967, chung_diameter_2012}.
+All proofs not included in this section can be found in
+Supplementary Proofs \ref{sec:supplementary_proofs}.
+
 
 \subsection{Clonal trees and matrices}
 \label{sec:clonal-trees-matrices}
@@ -296,14 +323,14 @@ However, the class of clonal matrices is much more restrictive:
 there are a handful of useful results concerning clonal matrices 
 which are not applicable to perfect phylogeny matrices.
 For example, a perfect phylogeny matrix need
-not be square and thus it is not necessarily invertible, while clonal matrices are both square 
-and invertible \cite{el-kebir_reconstruction_2015}. 
+not be square and thus it is not necessarily invertible, while clonal matrices are 
+always invertible \cite{el-kebir_reconstruction_2015}. 
 
 We continue the study of clonal matrices by first drawing an analogy to perfect phylogeny. 
 Specifically, we introduce a new, recursive definition
 of clonal matrices that is inspired by the recursive definition of perfect
 phylogeny matrices described by Gusfield \cite{gusfield_efficient_1991, peer_incomplete_2000}. Formally,
-we will show that a matrix $B$ is an $n$-clonal matrix if and only if
+we show that a matrix $B$ is an $n$-clonal matrix if and only if
 the rows and columns of $B$ can be reordered such that $B$ is \emph{clonally canonical},
 a term we define below.
 
@@ -397,6 +424,7 @@ and $\lvert x_i - x_{\delta(i)}\rvert \leq 1$ for all $i \neq r(\tree)$.
 \begin{figure}
     \begin{tcolorbox}[colback=white,colframe=black]
         \begin{minipage}[t]{0.40\textwidth}
+            \vspace{-1em}
             \begin{align}
                 \max_{u \geq 0, z \geq 0} &-\sum_{i=1}^n z_i \nonumber \\
                 \text{s.t.}\quad z_i &\geq f_i - \sum_{j=1}^n u_j B_{ji} \quad\text{for}\  i \in [n] \label{eq:constr1} \\
@@ -407,6 +435,7 @@ and $\lvert x_i - x_{\delta(i)}\rvert \leq 1$ for all $i \neq r(\tree)$.
         \hfill\vline\hfill
         \hspace{-2em}
         \begin{minipage}[t]{0.50\textwidth}
+            \vspace{-1em}
             \begin{align}
                 \min_{\alpha \geq 0, \beta \geq 0, \gamma \geq 0} \gamma + \sum_{i=1}^n f_i(\beta_i - \alpha_i) \nonumber \\
                 \text{s.t.} \quad 
@@ -600,6 +629,7 @@ observations in the following proposition.
 
 We are now ready to prove the main result of this section.
 \begin{theorem}
+    \label{thm:dptlp_polytime}
     Given a rooted tree $\tree$ with vertices $[n] = \{1, \ldots, n\}$ and a vector $w \in \mathbb{R}^n$, the 
     dot product tree labeling problem can be solved in $\mathcal{O}(nd)$ time where $d$ is the depth of the tree $\tree$.
 \end{theorem}
@@ -620,6 +650,12 @@ We are now ready to prove the main result of this section.
     length at most $d$. As this step requires only $\mathcal{O}(nd)$ additions, this proves the claim.
 \end{proof}
 
+Then, by reducing the variant allele frequency $\ell_1$-regression problem to the dot product
+tree labeling problem using Theorem \ref{thm:dptlp_equivalence} and applying Theorem \ref{thm:dptlp_polytime}, 
+we complete the proof of Theorem \ref{thm:ellonepolytime}.
+
+%\ellonepolytime*
+
 \newpage
 \bibliographystyle{plain}
 \bibliography{references}
@@ -627,6 +663,7 @@ We are now ready to prove the main result of this section.
 \newpage
 \appendix
 \section{Supplementary Proofs}
+\label{sec:supplementary_proofs}
 \clonallycanonical*
 \begin{proof}
     Suppose the theorem holds for all $k < n$. Clearly, the theorem holds for the base case when $n = 1$.
@@ -649,7 +686,7 @@ We are now ready to prove the main result of this section.
     by attaching the roots of $\tree_1, \ldots, \tree_k$ to the root of $\tree$. This completes
     this direction of the proof.
 
-    The equivalence of $(i)$ and $(iii)$ follows from (Lemma 1) of \cite{el-kebir_reconstruction_2015},
+    The equivalence of $(i)$ and $(iii)$ follows from Lemma 1 of \cite{el-kebir_reconstruction_2015},
     this completes the proof.
 \end{proof}
 
@@ -687,5 +724,3 @@ We are now ready to prove the main result of this section.
 \end{proof}
 
 \end{document}
-
-
