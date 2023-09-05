@@ -365,7 +365,7 @@ void perform_search(argparse::ArgumentParser search) {
         ancestry_graph.add_vertex(i);
     }
 
-    int assigned_root = search.get<int>("root");
+    int assigned_root = search.get<int>("assigned_root");
 
     size_t num_edges = 0;
     for (size_t i = 0; i < ncols; ++i) {
