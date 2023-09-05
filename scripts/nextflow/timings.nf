@@ -7,7 +7,7 @@ params.nmutations = [500, 1000, 2000, 4000]
 params.nclones    = [250, 500, 750, 1000]
 params.nsamples   = [50, 100, 200, 500]
 params.seeds      = [0, 1, 2, 3, 4, 5]
-params.coverage   = [50]
+params.coverage   = [50] 
 
 process create_sim {
     cpus 1
@@ -40,8 +40,8 @@ process regress_python {
     output:
         tuple file("python_results.json"), val(id)
 
+    // module load gurobi
     """
-    module load gurobi
     python '${params.python_script}' --tree ${clone_tree} --frequency-matrix ${freq_matrix} --output python
     """
 }
@@ -76,13 +76,13 @@ workflow {
 
     simulation =  parameter_channel | create_sim 
     cpp_res = simulation | regress_cpp
-    // py_res  = simulation | regress_python
+    py_res  = simulation | regress_python
 
-    cpp_res.collectFile{["${it[1]}_cpp_results.json", it[0]]}.subscribe {
-      println "A result is saved to $it"
+    cpp_res | map { result, name ->
+      result.moveTo("nextflow_results/timings/${name}_cpp_results.json")
     }
 
-    // py_res.collectFile{["${it[1]}_python_results.json", it[0]]}.subscribe {
-      // println "A result is saved to $it"
-    // }
+    py_res | map { result, name ->
+      result.moveTo("nextflow_results/timings/${name}_python_results.json")
+    }
 }

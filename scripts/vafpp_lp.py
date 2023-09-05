@@ -18,6 +18,7 @@ import pandas as pd
 import networkx as nx
 import piecewise_linear as pl
 import matplotlib.pyplot as plt
+import cplex
 
 from gurobipy import *
 
@@ -49,6 +50,50 @@ def construct_clonal_matrix(tree):
                 B[j, i] = 1
 
     return B
+
+"""
+Given a frequency matrix $F$ and a clonal matrix $B$, this function
+finds a usage matrix $U$ such that  
+        $$\sum_{i=1}^m\lVert F_i - (UB)_i \rVert_1$$
+is minimized, by using linear programming.
+"""
+def cplex_one_vafpp_linear_program(B, F):
+    n, m = F.shape[1], F.shape[0]
+
+    model = cplex.Cplex()
+    model.set_problem_name("1-VAFPP Primal Linear Program")
+
+    u_var_indices = list(range(m * n))
+    model.variables.add(lb=[0] * (m * n))
+
+    z_var_indices = list(range(m * n, 2 * m * n))
+    model.variables.add(lb=[0] * (m * n))
+
+    for i in range(m):
+        for j in range(n):
+            row_indices = [i * n + k for k in range(n)] + [m * n + i * n + j]
+            row_values = [-B[k, j] for k in range(n)] + [1]
+            model.linear_constraints.add(lin_expr=[cplex.SparsePair(ind=row_indices, val=row_values)], senses="G", rhs=[-F[i, j]])
+
+            row_values = [B[k, j] for k in range(n)] + [1]
+            model.linear_constraints.add(lin_expr=[cplex.SparsePair(ind=row_indices, val=row_values)], senses="G", rhs=[F[i, j]])
+
+    for i in range(m):
+        row_indices = [i * n + j for j in range(n)]
+        row_values = [1] * n
+        model.linear_constraints.add(lin_expr=[cplex.SparsePair(ind=row_indices, val=row_values)], senses="L", rhs=[1])
+
+    obj_indices = list(range(m * n, 2 * m * n))
+    model.objective.set_sense(model.objective.sense.minimize)
+    model.objective.set_linear(list(zip(obj_indices, [1] * len(obj_indices))))
+
+    starttime = model.get_time()
+    model.solve()
+    endtime = model.get_time()
+
+    objVal = model.solution.get_objective_value()
+
+    return objVal, endtime - starttime
 
 """
 Given a frequency matrix $F$ and a clonal matrix $B$, this function
@@ -149,17 +194,17 @@ if __name__ == '__main__':
     obj1, gurobi_time = one_vafpp_linear_program(B, F)
     end = time.time()
 
-    results["lp_time_with_building"] = end - start
-    results["lp_time_without_building"] = gurobi_time
-    results["lp_obj"] = obj1
+    results["gurobi_lp_time_with_building"] = end - start
+    results["gurobi_lp_time_without_building"] = gurobi_time
+    results["gurobi_lp_obj"] = obj1
 
     start = time.time()
-    obj2 = one_vafpp_dual_linear_program(B, F)
+    obj2, gurobi_time = one_vafpp_dual_linear_program(B, F)
     end = time.time()
 
-    results["dual_time_with_building"] = end - start
-    results["dual_time_without_building"] = gurobi_time
-    results["dual_obj"] = obj2
+    results["gurobi_dual_time_with_building"] = end - start
+    results["gurobi_dual_time_without_building"] = gurobi_time
+    results["gurobi_dual_obj"] = obj2
 
     start = time.time()
     obj3 = one_vafpp_dp(tree, F)
@@ -167,6 +212,14 @@ if __name__ == '__main__':
 
     results["dp_time"] = end - start
     results["dp_obj"] = obj3
+
+    start = time.time()
+    obj4, cplex_time = cplex_one_vafpp_linear_program(B, F)
+    end = time.time()
+
+    results["cplex_lp_time_with_building"] = end - start
+    results["cplex_lp_time_without_building"] = cplex_time
+    results["cplex_lp_obj"] = obj4
 
     with open(f"{args.output}_results.json", 'w') as f:
         json.dump(results, f, indent=4)
