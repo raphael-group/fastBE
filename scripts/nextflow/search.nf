@@ -5,6 +5,9 @@ params.pairtree_parse_output = "${params.proj_dir}/scripts/parse_pairtree_output
 params.allele_minima = "${params.proj_dir}/build/src/vafpp"
 params.outputDir     = "/n/fs/ragr-research/projects/vafpp/nextflow_results/"
 params.pairtree_bin  = "${params.proj_dir}/dependencies/pairtree/bin/pairtree"
+params.calder_jar    = "${params.proj_dir}/dependencies/calder/calder.jar"
+params.calder_input_script = "${params.proj_dir}/scripts/make_calder_input.py"
+params.calder_parse_output = "${params.proj_dir}/scripts/parse_calder_output.py"
 
 params.nmutations = [20, 60, 100, 200]
 params.nclones    = [5, 10, 30, 50]
@@ -49,6 +52,24 @@ process allele_minima {
     """
 }
 
+process create_calder_input { 
+    cpus 1
+    memory '1 GB'
+    time '10m'
+
+    input:
+        tuple path(clonal_matrix), path(mut_clone_mapping), path(freq_matrix), path(total_matrix),
+              path(clone_tree), path(usage_matrix), path(variant_matrix), val(clones), val(id)
+
+    output:
+        tuple file("calder_input.tsv"), val(id)
+
+    """
+    python '${params.calder_input_script}' ${variant_matrix} ${total_matrix} ${mut_clone_mapping} -o calder_input.tsv
+    """
+}
+
+
 process create_pairtree_input { 
     cpus 1
     memory '1 GB'
@@ -81,6 +102,24 @@ process pairtree {
     """
     '${params.pairtree_bin}' --params ${params_json} ${ssm} results.npz
     python '${params.pairtree_parse_output}' results.npz --output best_tree.txt
+    """
+}
+
+process calder {
+    cpus 16
+    memory '8 GB'
+    time '24h'
+
+    input:
+        tuple file(input_tsv), val(id)
+
+    output:
+        tuple file("tree.txt"), val(id)
+
+    """
+    export LD_LIBRARY_PATH=/n/fs/ragr-research/projects/vafpp/dependencies/calder/glpk-4.65/lib/jni 
+    java -jar '${params.calder_jar}' -i ${input_tsv} -o . -v glpk -N
+    python '${params.calder_parse_output}' calder_tree1.dot > tree.txt
     """
 }
 
@@ -118,7 +157,13 @@ workflow {
         clone_tree.copyTo("${outputPrefix}_tree.txt")
     }
 
+    simulation | create_calder_input | calder | map { tree, id ->
+        outputPrefix = "${params.outputDir}/calder/${id}"
+        tree.moveTo("${outputPrefix}_inferred_tree.txt")
+    }
+
     // run AlleleMinima
+    /*
     simulation | allele_minima | map { inferred_tree, inferred_results, id ->
         outputPrefix = "${params.outputDir}/allele_minima/${id}"
         inferred_tree.moveTo("${outputPrefix}_inferred_tree.txt")
@@ -131,4 +176,5 @@ workflow {
         results.moveTo("${outputPrefix}_results.npz")
         best_tree.moveTo("${outputPrefix}_best_tree.txt")
     }
+    */
 }
