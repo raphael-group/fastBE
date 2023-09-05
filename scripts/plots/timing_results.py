@@ -65,7 +65,7 @@ if __name__ == "__main__":
     if args.output is not None:
         plt.savefig(f'{args.output}_vs_parameters.pdf')
 
-    fig, axes = plt.subplots(ncols=2, figsize=(10, 5))
+    fig, axes = plt.subplots(ncols=2, figsize=(10, 4))
 
     speedup_df = python_timing_df.merge(cpp_df, on=['m', 'n', 's', 'c', 'r'])
     speedup_df['gurobi_speedup_no_build'] = speedup_df['gurobi_lp_time_without_building'] / speedup_df['cpp_dp_time'] 
@@ -73,6 +73,8 @@ if __name__ == "__main__":
     speedup_df['cplex_speedup_no_build'] = speedup_df['cplex_lp_time_without_building'] / speedup_df['cpp_dp_time'] 
     speedup_df['cplex_speedup_with_build'] = speedup_df['cplex_lp_time_with_building'] / speedup_df['cpp_dp_time']
     speedup_df['(n, s)'] = speedup_df.apply(lambda row: f'({row["n"]}, {row["s"]})', axis=1)
+
+    print(speedup_df.describe())
 
     speedup_df = speedup_df.melt(
         id_vars=['m', 'n', 's', 'c', 'r'], 

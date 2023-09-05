@@ -8,6 +8,7 @@
 #include <digraph.hpp>
 #include <piecewiselinearf.hpp>
 
+#include <cmath>
 #include <unordered_map>
 #include <random>
 #include <chrono>
@@ -364,6 +365,8 @@ void perform_search(argparse::ArgumentParser search) {
         ancestry_graph.add_vertex(i);
     }
 
+    int assigned_root = search.get<int>("root");
+
     size_t num_edges = 0;
     for (size_t i = 0; i < ncols; ++i) {
         for (size_t j = 0; j < ncols; ++j) {
@@ -409,7 +412,7 @@ void perform_search(argparse::ArgumentParser search) {
                 size_t i = counter++;
                 if (i >= num_samples) return;  // no more work to do
 
-                auto [clone_tree_int, root] = sample_random_spanning_tree(ancestry_graph, gen, 0);
+                auto [clone_tree_int, root] = sample_random_spanning_tree(ancestry_graph, gen, assigned_root);
 
                 digraph<clone_tree_vertex> clone_tree = convert_clone_tree(clone_tree_int, nrows);
                 deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root);
@@ -467,6 +470,7 @@ int main(int argc, char *argv[])
     );
 
     regress.add_description("Regresses a clone tree onto a frequency matrix.");
+    search.add_description("Searches for a clone tree that best fits a frequency matrix.");
 
     regress.add_argument("clone_tree")
            .help("adjacency list of the clone tree");
@@ -507,8 +511,13 @@ int main(int argc, char *argv[])
 
     search.add_argument("-a", "--ancestry_threshold")
           .help("ancestry threshold")
-          .default_value(0.10)
+          .default_value(1.0)
           .scan<'f', double>();
+
+    search.add_argument("-f", "--assigned_root")
+          .help("assigned root")
+          .default_value(0)
+          .scan<'u', unsigned int>();
 
     program.add_subparser(search);
     program.add_subparser(regress);
