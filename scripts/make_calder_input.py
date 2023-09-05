@@ -56,4 +56,4 @@ if __name__ == "__main__":
     column_names = flatten([[f'm{i}', f'm{i}'] for i in range(num_clones)])
     df = pd.DataFrame(columns).T
     df.columns = column_names
-    df.to_csv(args.output + '.csv', index=False)
+    df.to_csv(args.output, index=True, index_label='sample', sep='\t')
