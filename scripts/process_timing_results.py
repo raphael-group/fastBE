@@ -6,6 +6,9 @@ import pandas as pd
 def read_and_process(directory, res_type):
     data = []
     for filename in os.listdir(directory):
+        if not res_type in filename:
+            continue
+
         if filename.endswith('.json'):
             with open(os.path.join(directory, filename), 'r') as f:
                 file_data = json.load(f)
