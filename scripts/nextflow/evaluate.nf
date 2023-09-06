@@ -4,7 +4,8 @@ params.root_dir = '/n/fs/ragr-research/projects/vafpp/'
 params.ground_truth_dir = 'nextflow_results/ground_truth/'
 params.algorithms = [
     ['pairtree', 'nextflow_results/pairtree/', '_best_tree.txt'],
-    ['allele_minima', 'nextflow_results/allele_minima/', '_inferred_tree.txt']
+    ['allele_minima', 'nextflow_results/allele_minima/', '_inferred_tree.txt'],
+    ['calder', 'nextflow_results/calder/', '_inferred_tree.txt']
 ]
 
 def trimSuffix(original, suffix) {

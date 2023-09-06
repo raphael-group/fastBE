@@ -10,7 +10,7 @@ params.calder_input_script = "${params.proj_dir}/scripts/make_calder_input.py"
 params.calder_parse_output = "${params.proj_dir}/scripts/parse_calder_output.py"
 
 params.nmutations = [20, 60, 100, 200]
-params.nclones    = [5, 10, 30, 50]
+params.nclones    = [3, 5, 10, 30, 50]
 params.nsamples   = [10, 25, 50, 100]
 params.seeds      = [0, 1, 2, 3, 4, 5]
 params.coverage   = [100]
@@ -69,7 +69,6 @@ process create_calder_input {
     """
 }
 
-
 process create_pairtree_input { 
     cpus 1
     memory '1 GB'
@@ -109,6 +108,7 @@ process calder {
     cpus 16
     memory '8 GB'
     time '24h'
+    errorStrategy 'ignore'
 
     input:
         tuple file(input_tsv), val(id)
@@ -137,6 +137,7 @@ workflow {
     // create directories
     file("${params.outputDir}/allele_minima/").mkdirs()
     file("${params.outputDir}/pairtree/").mkdirs()
+    file("${params.outputDir}/calder/").mkdirs()
     file("${params.outputDir}/ground_truth/").mkdirs()
 
     // run simulation
@@ -157,7 +158,7 @@ workflow {
         clone_tree.copyTo("${outputPrefix}_tree.txt")
     }
 
-    simulation | create_calder_input | calder | map { tree, id ->
+    simulation | filter {it[it.size() - 2] <= 10} |  create_calder_input | calder | map { tree, id ->
         outputPrefix = "${params.outputDir}/calder/${id}"
         tree.moveTo("${outputPrefix}_inferred_tree.txt")
     }
