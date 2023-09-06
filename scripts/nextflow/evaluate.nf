@@ -17,7 +17,7 @@ def trimSuffix(original, suffix) {
 }
 
 process EvaluateTrees {
-    //errorStrategy 'ignore'
+    errorStrategy 'ignore'
 
     input:
         tuple val(algo), val(name), path(ground_truth), path(usage_matrix), path(inferred_tree)

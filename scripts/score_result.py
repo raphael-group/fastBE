@@ -94,12 +94,12 @@ if __name__ == "__main__":
     false_negatives = true_relations - inferred_relations
     negatives = set([(u, v) for u in true_tree.nodes() for v in true_tree.nodes() if u != v]) - positives
 
-    fpr = len(false_positives) / len(positives)
+    fpr = len(false_positives) / len(negatives)
 
     if len(negatives) == 0:
         fnr = 0
     else:
-        fnr = len(false_negatives) / len(negatives)
+        fnr = len(false_negatives) / len(positives)
 
     result = {
         'pairwise_relations': {
@@ -107,6 +107,8 @@ if __name__ == "__main__":
             'false_negative_rate': fnr,
             'false_positives': len(false_positives),
             'false_negatives': len(false_negatives),
+            'true_positives': len(positives) - len(false_negatives),
+            'true_negatives': len(negatives) - len(false_positives),
             'positives': len(positives),
             'negatives': len(negatives)
         }
