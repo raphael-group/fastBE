@@ -17,9 +17,9 @@ params.citup_qip = "/n/fs/ragr-data/users/schmidt/miniconda3/envs/citupenv/bin/r
 params.citup_input_script = "${params.proj_dir}/scripts/make_citup_input.py"
 params.citup_parse_output = "${params.proj_dir}/scripts/parse_citup_output.py"
 
-params.nmutations = [20, 60]//, 100, 200]
-params.nclones    = [3, 5]//, 10, 30, 50]
-params.nsamples   = [10, 25]//, 50, 100]
+params.nmutations = [20, 60, 100, 200]
+params.nclones    = [3, 5, 10, 30, 50]
+params.nsamples   = [10, 25, 50, 100]
 params.seeds      = [0, 1, 2, 3, 4, 5]
 params.coverage   = [100]
 
@@ -152,7 +152,7 @@ process citup {
     cpus 16
     memory '8 GB'
     time '24h'
-    //errorStrategy 'ignore'
+    errorStrategy 'ignore'
 
     input:
         tuple file(freq_matrix), file(clustering), val(clones), val(id)
@@ -210,7 +210,6 @@ workflow {
     }
 
     /* 
-
     // run CALDER
     simulation | filter {it[it.size() - 2] <= 10} |  create_calder_input | calder | map { tree, id ->
         outputPrefix = "${params.outputDir}/calder/${id}"
