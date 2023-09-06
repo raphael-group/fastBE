@@ -204,7 +204,7 @@ workflow {
     }
 
     // run CITUP
-    simulation | filter {it[it.size() - 2] <= 5} |  create_citup_input | citup | map { tree, id ->
+    simulation | filter {5 < it[it.size() - 2] && it[it.size() - 2] <= 10} |  create_citup_input | citup | map { tree, id ->
         outputPrefix = "${params.outputDir}/citup/${id}"
         tree.moveTo("${outputPrefix}_inferred_tree.txt")
     }
