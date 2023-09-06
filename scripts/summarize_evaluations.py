@@ -23,7 +23,6 @@ def load_files(directory):
                 U_error = content["frequency_matrix"]["U_error"]
                 F_error = content["frequency_matrix"]["F_error"]
 
-
                 row = {
                     'algorithm': algorithm,
                     'mutations': m,

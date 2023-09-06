@@ -215,19 +215,19 @@ workflow {
         outputPrefix = "${params.outputDir}/calder/${id}"
         tree.moveTo("${outputPrefix}_inferred_tree.txt")
     }
+    */
 
     // run AlleleMinima
-    simulation | allele_minima | map { inferred_tree, inferred_results, id ->
+    simulation | filter {it[it.size() - 2] <= 5} | allele_minima | map { inferred_tree, inferred_results, id ->
         outputPrefix = "${params.outputDir}/allele_minima/${id}"
         inferred_tree.moveTo("${outputPrefix}_inferred_tree.txt")
         inferred_results.moveTo("${outputPrefix}_inferred_results.json")
     }
 
     // run Pairtree
-    simulation | create_pairtree_input | pairtree | map { results, best_tree, id ->
+    simulation | filter {it[it.size() - 2] <= 5} | create_pairtree_input | pairtree | map { results, best_tree, id ->
         outputPrefix = "${params.outputDir}/pairtree/${id}"
         results.moveTo("${outputPrefix}_results.npz")
         best_tree.moveTo("${outputPrefix}_best_tree.txt")
     }
-    */
 }

@@ -5,7 +5,8 @@ params.ground_truth_dir = 'nextflow_results/ground_truth/'
 params.algorithms = [
     ['pairtree', 'nextflow_results/pairtree/', '_best_tree.txt'],
     ['allele_minima', 'nextflow_results/allele_minima/', '_inferred_tree.txt'],
-    ['calder', 'nextflow_results/calder/', '_inferred_tree.txt']
+    ['calder', 'nextflow_results/calder/', '_inferred_tree.txt'],
+    ['citup', 'nextflow_results/citup/', '_inferred_tree.txt']
 ]
 
 def trimSuffix(original, suffix) {
@@ -16,7 +17,7 @@ def trimSuffix(original, suffix) {
 }
 
 process EvaluateTrees {
-    errorStrategy 'ignore'
+    //errorStrategy 'ignore'
 
     input:
         tuple val(algo), val(name), path(ground_truth), path(usage_matrix), path(inferred_tree)

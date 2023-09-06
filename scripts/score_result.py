@@ -39,12 +39,18 @@ def one_vafpp_linear_program(B, F):
 """
 Constructs the clonal matrix from a clonal tree.
 """
-def construct_clonal_matrix(tree):
-    n = len(tree.nodes)
+def construct_clonal_matrix(tree, n):
 
     B = np.zeros((n, n))
     for i in range(n):
         for j in range(n):
+            if i == j:
+                B[j, i] = 1
+                continue
+
+            if not tree.has_node(i) or not tree.has_node(j):
+                continue
+
             if nx.has_path(tree, i, j):
                 B[j, i] = 1
 
@@ -108,10 +114,10 @@ if __name__ == "__main__":
 
     # Compute the frequency and usage matrix error
     U = np.loadtxt(args.true_usage_matrix)
-    B = construct_clonal_matrix(true_tree)
+    B = construct_clonal_matrix(true_tree, len(true_tree.nodes))
     F = U @ B
 
-    B_hat = construct_clonal_matrix(inferred_tree)
+    B_hat = construct_clonal_matrix(inferred_tree, len(true_tree.nodes))
     U_hat = one_vafpp_linear_program(B_hat, F)
 
     u_l1_error = np.sum(np.abs(U - U_hat))
