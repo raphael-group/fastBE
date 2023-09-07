@@ -17,9 +17,9 @@ params.citup_qip = "/n/fs/ragr-data/users/schmidt/miniconda3/envs/citupenv/bin/r
 params.citup_input_script = "${params.proj_dir}/scripts/make_citup_input.py"
 params.citup_parse_output = "${params.proj_dir}/scripts/parse_citup_output.py"
 
-params.nmutations = [20, 60, 100, 200]
-params.nclones    = [3, 5, 10, 30, 50]
-params.nsamples   = [10, 25, 50, 100]
+params.nmutations = [20, 30, 40, 50]//, 100, 200]
+params.nclones    = [3, 5, 10]//, 30, 50]
+params.nsamples   = [5, 10, 25]//, 50, 100]
 params.seeds      = [0, 1, 2, 3, 4, 5]
 params.coverage   = [100]
 
@@ -203,29 +203,28 @@ workflow {
         clone_tree.copyTo("${outputPrefix}_tree.txt")
     }
 
+    // filter {5 < it[it.size() - 2] && it[it.size() - 2] <= 10}
     // run CITUP
-    simulation | filter {5 < it[it.size() - 2] && it[it.size() - 2] <= 10} |  create_citup_input | citup | map { tree, id ->
+    simulation  | create_citup_input | citup | map { tree, id ->
         outputPrefix = "${params.outputDir}/citup/${id}"
         tree.moveTo("${outputPrefix}_inferred_tree.txt")
     }
 
-    /* 
     // run CALDER
-    simulation | filter {it[it.size() - 2] <= 10} |  create_calder_input | calder | map { tree, id ->
+    simulation | create_calder_input | calder | map { tree, id ->
         outputPrefix = "${params.outputDir}/calder/${id}"
         tree.moveTo("${outputPrefix}_inferred_tree.txt")
     }
-    */
 
     // run AlleleMinima
-    simulation | filter {it[it.size() - 2] <= 5} | allele_minima | map { inferred_tree, inferred_results, id ->
+    simulation | allele_minima | map { inferred_tree, inferred_results, id ->
         outputPrefix = "${params.outputDir}/allele_minima/${id}"
         inferred_tree.moveTo("${outputPrefix}_inferred_tree.txt")
         inferred_results.moveTo("${outputPrefix}_inferred_results.json")
     }
 
     // run Pairtree
-    simulation | filter {it[it.size() - 2] <= 5} | create_pairtree_input | pairtree | map { results, best_tree, id ->
+    simulation | create_pairtree_input | pairtree | map { results, best_tree, id ->
         outputPrefix = "${params.outputDir}/pairtree/${id}"
         results.moveTo("${outputPrefix}_results.npz")
         best_tree.moveTo("${outputPrefix}_best_tree.txt")
