@@ -108,7 +108,7 @@
 \usepackage{todonotes}
 
 \title{
-    A novel regression based approach to phylogenetic reconstruction 
+    A regression based approach to phylogenetic reconstruction 
     from multi-sample bulk DNA sequencing of tumors
 }
 \author[1]{Henri Schmidt}
@@ -125,7 +125,7 @@
     investigate and reconstruct the phylogeny of patient tumors. However, as 
     bulk DNA sequencing of tumor tissue captures thousands of cells from a heterogenous 
     mixture of distinct subpopulations, accurate reconstruction of the tumor phylogeny
-    requires simultaneous deconvolutiona and inference of ancestral relationships, leading
+    requires simultaneous deconvolution and inference of ancestral relationships, leading
     to computationally challenging optimization problems. 
 
     \textbf{Results:} Here, we develop a new
@@ -142,8 +142,7 @@
     in terms of its ability to scale to hundreds of samples and reconstruction accuracy.
 
     \textbf{Availability:} \ourmethod is implemented in \Cpp and is available at: \url{github.com/schmidt73/vafpp_opt}. 
-    Our fast regression algorithm is available as a header-only library for \Cpp with
-    bindings to Python.
+    Our fast regression algorithm is available as a header-only library for \Cpp.
 \end{abstract}
 
 % ABSTRACT DRAFT #1:
@@ -229,6 +228,7 @@ between the observed frequency matrix $F$ and the inferred matrices $U$ and $B$.
   \label{prob:vafp}
   Given a frequency matrix $F$, \emph{variant allele frequency deconvolution problem} ($L$-VAFDP) is to
   find both a usage matrix $U$ and a clonal matrix $B$ such that the loss $L(F, U, B)$ is minimized.
+
 \end{problem}
 
 The main focus of this work is the regression problem that appears when the
@@ -240,6 +240,7 @@ right stochastic matrix $U$ such that the loss $L(F, U, B)$ is minimized.
   Given a frequency matrix $F$ and a clonal matrix $B$, the 
   \emph{variant allele frequency $L$-regression problem} ($L$-VAFRP) is to
   find a usage matrix $U$ such that the loss $L(F, U, B)$ is minimized.
+  We denote this minimum loss as $\,L^*(F, B)$.
 \end{problem}
 
 In the special case where the loss $L_p(F, U, B) \defeq \sum_{i=1}^m\lVert F_i - (UB)_i \rVert_p$ for $p \in \{1, 2\}$,
@@ -250,8 +251,7 @@ which are solveable in polynomial time \henri{cite}. Throughout the remainder of
 we will focus on the $L_1$ regression and deconvolution problems, which we call the 
 \emph{variant allele frequency $\ell_1$-regression problem} ($\ell_1$-VAFRP) and 
 \emph{variant allele frequency $\ell_1$-deconvolution problem} ($\ell_1$-VAFDP)
-respectively.
-
+respectively. 
 \section{Related Work}
 
 Various formulations of the variant allele frequency deconvolution problem have been 
@@ -305,6 +305,7 @@ worst case behavior.
 % respectively.
 
 \section{Theory}
+\label{sec:theory}
 Thus far, the main theoretical focus in inferring tumor phylogenies from bulk DNA sequencing data 
 has centered around the computationally challenging, variant allele frequency \emph{deconvolution} 
 problem \henri{cite}. Here, we complement this existing theory by shifting the focus 
@@ -539,7 +540,7 @@ satisfied.
 \end{proof}
 
 \subsection{An algorithm for the dot product tree labeling problem}
-
+\label{subsec:dptlp_algo}
 In this section, we derive an efficient algorithm for the dot product tree labeling problem. 
 There are two key ideas underlying our algorithm. The first idea is that 
 exploiting the tree structure enables us to express the solution for the subtree rooted at a vertex $i$
@@ -676,7 +677,85 @@ Then, by reducing the variant allele frequency $\ell_1$-regression problem to th
 tree labeling problem using Theorem \ref{thm:dptlp_equivalence} and applying Theorem \ref{thm:dptlp_polytime}, 
 we complete the proof of Theorem \ref{thm:ellonepolytime}.
 
+\section{A stochastic search algorithm for the VAF $\ell_1$-deconvolution problem}
+\label{sec:ell1_deconvolution}
+Here we describe a simple, stochastic search algorithm, \ourmethod, for the 
+variant allele frequency $\ell_1$-deconvolution problem which builds 
+upon the fast regression algorithm described in Section \ref{sec:theory}. In particular,
+our algorithm first generates a set of random trees and then performs hill climbing to 
+minimize the objective function $L_1(F, \tree)$ over this set of sampled trees:
+\begin{enumerate}
+    \item Construct a weighted, directed graph $G = (V, E)$ with vertices $[n]$ and edge weights $w_{ij}$.
+    \item Independently sample $k$ random spanning trees $\{\tree_1, \ldots, \tree_k\}$ from $G$ using Wilson's algorithm \cite{wilson1996generating},
+        where the probability of a tree is proportional to the sum of its edge weights.
+    \item For each tree $\tree_i$, perform greedy hill climbing to minimize the objective $L_1^*(F, \tree_i)$ using
+        subtree prune and regraft (SPR) operations \henri{cite} until a local minimum is reached. 
+        % That is, we stop when there is no SPR operation which decreases the objective value.
+    \item Output the hill-climbed tree with the smallest objective value.
+\end{enumerate}
+Since at every step of the hill climbing process, there are a total of $\mathcal{O}(n^2)$ subtree prune and regraft operations (SPR) available to consider 
+\henri{cite}, the running time of this algorithm is dominated by the time to compute the objective function $L_1^*(F, B)$ over
+all such candidate trees. A blackbox approach to this step which uses the algorithm given by Theorem \ref{thm:ellonepolytime} would 
+take $\mathcal{O}(n^3d)$ time, since there are $\mathcal{O}(n^2)$ candidate trees and the regression algorithm requires $\mathcal{O}(nd)$ 
+time. To reduce the computational cost of this step, we exploit the optimal substructure of
+our dynamic programming algorithm described in Subsection \ref{subsec:dptlp_algo} to perform all such 
+computations in $\mathcal{O}(n^2\tilde{d})$ time, where $\tilde{d}$ is the average depth of the tree 
+(Supplementary Section \henri{reference}).
+
+Choosing the weighted, directed graph $G$ is a critical step in the algorithm. 
+One plausible choice of $G$ is the \emph{ancestry graph} \cite{el-kebir_reconstruction_2015, myers_calder_2019},
+which is an unweighted graph constructed by including an edge $(i, j)$ if the ancestry condition \cite{el-kebir_reconstruction_2015}
+between clone $i$ and $j$ is not significantly violated. Another plausible choice of $G$ is 
+the complete graph whose weights $w_{ij}$ are proportional to those in the \emph{pairs tensor} constructed by 
+Pairtree \cite{wintersinger_reconstructing_2022}. Pairtree \cite{wintersinger_reconstructing_2022} uses a simple model of 
+pairwise relationships to compute this pairs tensor, which describes the likelihood of each pairwise relationship $(i, j)$.
+Rather than use one of these sophisticated approaches, we simply set $G$ to the complete graph with edge weights $w_{ij} = 1$ 
+in our experiments.
+
 %\ellonepolytime*
+
+\section{Results}
+\label{sec:results}
+\subsection{Timing comparison to linear programming solvers}
+\label{sec:results_mathprog}
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/sim_timing_relative_speedup.pdf}
+    \caption{
+        \label{fig:sim_timing_relative_speedup}
+        Relative wall-clock runtime comparison of our algorithm to that of two commercial linear programming solvers, 
+        Gurobi and CPLEX. \textbf{(Left)} The comparison includes both the time to build and solve the model. 
+        \textbf{(Right)} The comparison includes only the time to solve the model.
+    }
+\end{figure}
+
+To empirically demonstrate the utility of our regression algorithm, we compared an
+implementation of our algorithm to a linear programming (LP) based approach.
+In particular, we implemented the natural primal and dual LP formulations solving the VAF 
+$\ell_1$ regression problem (Supplementary Section \henri{ref}) using two 
+commercial LP solvers, Gurobi \cite{gurobi} and CPLEX \cite{ibm_cplex}. Then, we simulated
+264 pairs of frequency matrices $F$ and clonal matrices $B$, and measured
+the wall-clock runtime of our algorithm and the LP solvers on these simulated instances (Supplementary Section \henri{ref}). 
+When measuring the runtime of the LP solvers, we separated the 
+time required to solve the LP and the time required to construct the LP. Including only the
+time solve the model, we found that our algorithm was a median of $26.5$ times faster than Gurobi and 
+$41.2$ times faster than CPLEX (Figure \ref{fig:sim_timing_relative_speedup}). 
+When considering both the time required to build and to solve the LP, our algorithm was a median of $2676.0$ times faster than Gurobi 
+and $875.9$ times faster than CPLEX (Figure \ref{fig:sim_timing_relative_speedup}). 
+
+\subsection{Evaluation on simulated data}
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/sim_f1_score.pdf}
+    \caption{
+        \label{fig:sim_f1_score}
+        The accuracy of reconstructing pairwise relations \ourmethod, CITUP \cite{malikic_clonality_2015}, 
+        CALDER \cite{myers_calder_2019}, and Pairtree \cite{wintersinger_reconstructing_2022} on simulated data. 
+        \textbf{(Left)} The F1-score of on 
+        instances with $\leq 10$ clones. \textbf{(Right)} The F1-score on instances with 
+        $> 20$ clones, methods that did not scale to these instances were excluded.
+    }
+\end{figure}
 
 \newpage
 \bibliographystyle{plain}
@@ -744,5 +823,6 @@ we complete the proof of Theorem \ref{thm:ellonepolytime}.
     As $g(\psi)$ is concave, its second derivative $g''(\psi)$ is non-positive, which implies that $h(\psi)$ is also concave. Since $h$ is trivially
     piecewise linear by \eqref{eq:h_form}, the proof is complete.
 \end{proof}
+
 
 \end{document}
