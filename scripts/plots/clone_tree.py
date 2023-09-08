@@ -17,17 +17,25 @@ def draw_graph(adjacency_list_file, ax=None):
             
             for node in nodes[1:]:
                 T.add_edge(parent_node, node)
-
+    
     pos = graphviz_layout(T, prog='dot')
-    nx.draw(T, pos, with_labels=True, arrows=True, ax=ax)
+
+    labels = {}
+    for node in T.nodes():
+        labels[node] = node + 1
+
+    nx.draw(T, pos, with_labels=False, arrows=True, ax=ax)
+    nx.draw_networkx_labels(T, pos, labels, font_size=10, ax=ax)
 
 def main():
     parser = argparse.ArgumentParser(description="Draw a graph from an adjacency list")
     parser.add_argument("adjacency_lists", help="The file containing the adjacency list", nargs='+')
-
     args = parser.parse_args()
 
     fig, axes = plt.subplots(nrows=1, ncols=len(args.adjacency_lists))
+    if len(args.adjacency_lists) == 1:
+        axes = [axes]
+
     for i, adjacency_list_file in enumerate(args.adjacency_lists):
         axes[i].set_title(adjacency_list_file)
         draw_graph(adjacency_list_file, axes[i])
