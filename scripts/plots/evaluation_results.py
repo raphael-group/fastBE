@@ -169,12 +169,6 @@ def main():
         xaxis='clones',
         xaxislabel='Number of Clones'
     )
-    # plot_matrix_error(
-        # df[df['clones'] == 50], 
-        # output=args.output + '_50samples_matrix_error.pdf', 
-        # xaxis='samples', 
-        # xaxislabel='Number of Samples'
-    # )
 
     fig, axes = plt.subplots(figsize=(8, 3.5), nrows=1, ncols=2)
     axes = axes[::-1]
@@ -193,7 +187,6 @@ def main():
     axes[1].legend(title='Algorithm')
     axes[1].get_legend().remove()
 
-
     handles, labels = axes[1].get_legend_handles_labels()
     labels = list(map(lambda x: algorithm_name_map[x], labels))
     axes[0].legend(handles, labels, title='Algorithm', loc='upper right')
@@ -201,6 +194,31 @@ def main():
     fig.tight_layout()
     fig.savefig(args.output + '_f1_score.pdf', transparent=True)
 
+    fig, ax = plt.subplots(figsize=(8, 3.5), nrows=1, ncols=1)
+    axes = [ax]
+    sns.boxplot(
+        data=df[df['algorithm'].isin(['allele_minima', 'pairtree'])], x='clone_and_sample', y='elapsed_time', 
+        hue='algorithm', fliersize=0, palette=algorithm_color_map, ax=axes[0]
+    )
+    set_alpha(axes[0], 0.5)
+    sns.stripplot(
+        data=df[df['algorithm'].isin(['allele_minima', 'pairtree'])], x='clone_and_sample', y='elapsed_time', 
+        hue='algorithm', dodge=True, jitter=True, marker='o', alpha=0.5, legend=False, palette=algorithm_color_map, ax=axes[0]
+    )
+    axes[0].set(yscale='log')
+    axes[0].set_xlabel('(Number of Clones, Number of Samples)')
+    axes[0].set_ylabel('log(Elapsed Time (s))')
+
+    for tick in axes[0].get_xticklabels():
+        tick.set_rotation(60)
+
+    handles, labels = axes[0].get_legend_handles_labels()
+    labels = list(map(lambda x: algorithm_name_map[x], labels))
+    axes[0].legend(handles, labels, title='Algorithm', loc='upper right')
+
+    fig.tight_layout()
+    fig.savefig(args.output + '_elapsed_time.pdf', transparent=True)
+    
     print(df[df['clones'] <= 10].groupby(['algorithm', 'clones'])['f1_score'].mean())
     print(df[df['clones'] > 10].groupby(['algorithm', 'clones'])['f1_score'].mean())
     print(df[df['clones'] <= 10].algorithm.value_counts())

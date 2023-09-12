@@ -22,7 +22,8 @@ def load_files(directory):
                         match = re.search(r'Elapsed \(wall clock\) time \(h:mm:ss or m:ss\): (.*)', timing) 
                         elapsed_time = match.groups()[0]
                         elapsed_time = sum(x * float(t) for x, t in zip([1, 60, 3600], elapsed_time.split(":")[::-1]))
-                        content['elapsed_time'] = elapsed_time
+                else:
+                    elapsed_time = None
 
                 false_positive_rate = content['pairwise_relations']['false_positive_rate']
                 false_negative_rate = content['pairwise_relations']['false_negative_rate']
@@ -47,7 +48,8 @@ def load_files(directory):
                     'false_positives': false_positives,
                     'false_negatives': false_negatives,
                     'U_error': U_error,
-                    'F_error': F_error
+                    'F_error': F_error,
+                    'elapsed_time': elapsed_time
                 }
                 data.append(row)
 

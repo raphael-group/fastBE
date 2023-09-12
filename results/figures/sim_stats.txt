@@ -64,6 +64,12 @@ pairtree       3         0.997101
                5         0.974673
                10        0.903740
 Name: f1_score, dtype: float64
+algorithm      clones
+allele_minima  30        0.964154
+               50        0.914368
+pairtree       30        0.953414
+               50        0.715548
+Name: f1_score, dtype: float64
 calder           216
 allele_minima    216
 pairtree         200
