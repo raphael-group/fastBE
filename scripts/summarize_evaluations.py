@@ -14,6 +14,16 @@ def load_files(directory):
                 algorithm = file[:match.start()]
 
                 m, n, s, c, r = match.groups()
+
+                timing_result_file = os.path.join(f'nextflow_results/{algorithm}/', f'm{m}_n{n}_s{s}_c{c}_r{r}_timing.txt')
+                if os.path.exists(timing_result_file):
+                    with open(timing_result_file, 'r') as f:
+                        timing = f.read()
+                        match = re.search(r'Elapsed \(wall clock\) time \(h:mm:ss or m:ss\): (.*)', timing) 
+                        elapsed_time = match.groups()[0]
+                        elapsed_time = sum(x * float(t) for x, t in zip([1, 60, 3600], elapsed_time.split(":")[::-1]))
+                        content['elapsed_time'] = elapsed_time
+
                 false_positive_rate = content['pairwise_relations']['false_positive_rate']
                 false_negative_rate = content['pairwise_relations']['false_negative_rate']
                 positives = content['pairwise_relations']['positives']

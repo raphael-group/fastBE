@@ -202,6 +202,7 @@ def main():
     fig.savefig(args.output + '_f1_score.pdf', transparent=True)
 
     print(df[df['clones'] <= 10].groupby(['algorithm', 'clones'])['f1_score'].mean())
+    print(df[df['clones'] > 10].groupby(['algorithm', 'clones'])['f1_score'].mean())
     print(df[df['clones'] <= 10].algorithm.value_counts())
     print(df[~df['algorithm'].isin(['calder', 'citup'])].algorithm.value_counts())
 
