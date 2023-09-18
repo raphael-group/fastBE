@@ -113,7 +113,7 @@ void subtree_prune_and_regraft(digraph<clone_tree_vertex>& tree, int u, int v, i
  *
  * Input: 
  *  - clone_tree: A clone tree represented as a digraph.
- *  - vertex_map: A map from the rows of the frequency matrix to the 
+ *  - vertex_map: A map from the columns of the frequency matrix to the 
  *    vertices of the clone tree.
  *  - F: A frequency matrix represented as a 2D vector.
 */
@@ -124,14 +124,13 @@ double one_vafpp(
     int root
 ) {
     size_t nrows = F.size();
-    size_t ncols = F[0].size();
 
     std::function<void(int)> one_vafpp_recursive = [&](int i) {
         if (clone_tree[vertex_map.at(i)].data.valid) return;
 
         std::vector<double>& w_ref = clone_tree[vertex_map.at(i)].data.w;
 
-        /* If not valid, first set w vector. */
+        /* if not valid, first set w vector. */
         for (size_t j = 0; j < nrows; ++j) {
             w_ref[j] = F[j][i];
             for (auto k : clone_tree.successors(vertex_map.at(i))) {
@@ -174,7 +173,7 @@ double one_vafpp(
     for (size_t j = 0; j < nrows; ++j) {
         PiecewiseLinearF f = clone_tree[root].data.fs[j];
         f.compute_minimizer();
-        f.addInPlace(PiecewiseLinearF({1 - F[j][0]}, 0));
+        f.addInPlace(PiecewiseLinearF({1 - F[j][root]}, 0));
         obj += f.minimizer();
     }
 
@@ -189,7 +188,7 @@ double one_vafpp(
  *
  * Input: 
  *  - clone_tree: A clone tree represented as a digraph.
- *  - vertex_map: A map from the rows of the frequency matrix to the 
+ *  - vertex_map: A map from the columns of the frequency matrix to the 
  *    vertices of the clone tree.
  *  - F: A frequency matrix represented as a 2D vector.
 */
@@ -234,6 +233,65 @@ double one_vafpp(const digraph<int>& clone_tree, const std::unordered_map<int, i
     return -1 * obj;
 }
 
+/*
+ * Computes the matrix for the total violation of the sum condition 
+ * to the frequency matrix $F$ and the clone tree $T$. In particular,
+ *    $$A[i, j] = \sum_{k\in C(j)} F_{i,k}$$
+ * which allows us to compute (and update) the total violation of the
+ * sum condition in $\mathcal{O}(nm)$ time.
+ */
+template <typename T>
+std::vector<std::vector<double>> compute_sum_violation_matrix(
+    const digraph<T>& clone_tree, const std::unordered_map<int, int>& vertex_map, 
+    const std::vector<std::vector<double>>& F
+) {
+    size_t nrows = F.size();
+    size_t ncols = F[0].size();
+
+    std::vector<std::vector<double>> A(nrows, std::vector<double>(ncols, 0.0));
+
+    for (size_t j = 0; j < nrows; ++j) {
+        for (size_t i = 0; i < ncols; ++i) {
+            for (auto k : clone_tree.successors(vertex_map.at(i))) {
+                A[j][i] = F[j][clone_tree[k].data.id];
+            }
+        }
+    }
+
+    return A;
+}
+
+/*
+ * Updates the matrix for the total violation of the sum condition
+ * to the frequency matrix $F$ and the clone tree $T$ given a set of
+ * vertices $U$ to update. Also returns the difference in the total
+ * violation before and after the update.
+ */
+template <typename T>
+double update_sum_violation_matrix(
+    const digraph<T>& clone_tree, const std::unordered_map<int, int>& vertex_map, 
+    const std::vector<std::vector<double>>& F, std::vector<std::vector<double>>& A, 
+    const std::vector<int>& us
+) {
+    size_t nrows = F.size();
+
+    float difference = 0;
+    for (size_t j = 0; j < nrows; ++j) {
+        for (auto u : us) {
+            float old_violation = std::max(A[j][u] - F[j][u], 0.0);
+            A[j][u] = 0;
+            for (auto k : clone_tree.successors(vertex_map.at(u))) {
+                A[j][u] += F[j][clone_tree[k].data.id];
+            }
+
+            float new_violation = std::max(A[j][u] - F[j][u], 0.0);
+            difference += new_violation - old_violation;
+        }
+    }
+
+    return difference;
+}
+
 /* 
  * Performs hill climbing search to minimize the reconstruction error 
  * of the clone tree by using subtree prune and regraft operations. 
@@ -241,7 +299,7 @@ double one_vafpp(const digraph<int>& clone_tree, const std::unordered_map<int, i
  *
  * Input:
  * - clone_tree: A clone tree represented as a digraph.
- * - vertex_map: A map from the rows of the frequency matrix to the
+ * - vertex_map: A map from the columns of the frequency matrix to the
  *   vertices of the clone tree.
  * - F: A frequency matrix represented as a 2D vector.
  * - root: The root of the clone tree.
@@ -250,9 +308,28 @@ void deterministic_hill_climb(
     digraph<clone_tree_vertex>& clone_tree, const std::unordered_map<int, int>& vertex_map, 
     const std::vector<std::vector<double>>& F, int root
 ) {
+    auto A = compute_sum_violation_matrix(clone_tree, vertex_map, F);
+    float total_violation = 0;
+    for (size_t i = 0; i < A.size(); ++i) {
+        for (size_t j = 0; j < A[0].size(); ++j) {
+            total_violation += std::max(A[i][j] - F[i][j], 0.0);
+        }
+    }
+
+    /* 
+     * Invariant(s): 
+     *    - total_violation: at the beginning and end of every iteration is equal to the
+     *    total violation of the sum condition.
+     */
     while (true) {
-        float best_score = one_vafpp(clone_tree, vertex_map, F, root);
-        std::pair<int, int> best_move = {-1, -1};
+        /* 
+         * Construct a priority queue of all possible moves, ranked by 
+         * the amount they reduce the total violation score.  Since the 
+         * total violation is a lower bound on the reconstruction error,
+         * we can stop when the total violation is greater than the 
+         * best score.
+         */
+        std::set<std::tuple<float, int, int>> move_priority_queue;
         for (auto u : clone_tree.nodes()) { // quadratic iteration complexity: okay?
             for (auto v : clone_tree.nodes()) {
                 if (u == v || u == root || ancestor(clone_tree, u, v)) {
@@ -261,15 +338,34 @@ void deterministic_hill_climb(
 
                 int parent = *clone_tree.predecessors(u).begin();
                 subtree_prune_and_regraft(clone_tree, u, v, root);
+                total_violation += update_sum_violation_matrix(clone_tree, vertex_map, F, A, {v, parent});
+                move_priority_queue.insert({total_violation, u, v});
 
-                float score = one_vafpp(clone_tree, vertex_map, F, root);
                 subtree_prune_and_regraft(clone_tree, u, parent, root);
-
-                if (score < best_score) {
-                    best_score = score;
-                    best_move = {u, v};
-                } 
+                total_violation += update_sum_violation_matrix(clone_tree, vertex_map, F, A, {v, parent});
             }
+        }
+
+        float best_score = one_vafpp(clone_tree, vertex_map, F, root);
+        std::pair<int, int> best_move = {-1, -1};
+        int iterations = 0;
+        for (auto [tv, u, v] : move_priority_queue) {
+            if (tv > best_score) break;
+
+            iterations++;
+        
+            int parent = *clone_tree.predecessors(u).begin();
+            subtree_prune_and_regraft(clone_tree, u, v, root);
+            total_violation += update_sum_violation_matrix(clone_tree, vertex_map, F, A, {v, parent});
+
+            float score = one_vafpp(clone_tree, vertex_map, F, root);
+            subtree_prune_and_regraft(clone_tree, u, parent, root);
+            total_violation += update_sum_violation_matrix(clone_tree, vertex_map, F, A, {v, parent});
+
+            if (score < best_score) {
+                best_score = score;
+                best_move = {u, v};
+            } 
         }
 
         if (best_move.first == -1) {
@@ -277,7 +373,12 @@ void deterministic_hill_climb(
         }
 
         spdlog::info("Best score is {}", best_score);
-        subtree_prune_and_regraft(clone_tree, best_move.first, best_move.second, root);
+
+        auto [u, v] = best_move;
+        subtree_prune_and_regraft(clone_tree, u, v, root);
+
+        int parent = *clone_tree.predecessors(u).begin();
+        total_violation += update_sum_violation_matrix(clone_tree, vertex_map, F, A, {v, parent});
     }
 }
 
@@ -387,6 +488,16 @@ void perform_search(argparse::ArgumentParser search) {
         }
     }
 
+    std::map<std::pair<int,int>, double> G_weights;
+    for (auto [i, j] : ancestry_graph.edges()) {
+        //for (size_t k = 0; k < nrows; ++k) {
+            //G_weights[std::make_pair(i, j)] = std::max(frequency_matrix[k][j] - frequency_matrix[k][i], G_weights[std::make_pair(i, j)]);
+        //}
+
+        G_weights[std::make_pair(i, j)] = 1.0; // - G_weights[std::make_pair(i, j)];
+        spdlog::info("G[{}, {}] = {}", i, j, G_weights[std::make_pair(i, j)]);
+    }
+
     spdlog::info("Number of edges in ancestry graph: {}", num_edges);
 
     std::unordered_map<int, int> identity_map;
@@ -412,7 +523,7 @@ void perform_search(argparse::ArgumentParser search) {
                 size_t i = counter++;
                 if (i >= num_samples) return;  // no more work to do
 
-                auto [clone_tree_int, root] = sample_random_spanning_tree(ancestry_graph, gen, assigned_root);
+                auto [clone_tree_int, root] = sample_random_spanning_tree(ancestry_graph, G_weights, gen, assigned_root);
 
                 digraph<clone_tree_vertex> clone_tree = convert_clone_tree(clone_tree_int, nrows);
                 deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root);

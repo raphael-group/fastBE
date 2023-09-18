@@ -1,6 +1,7 @@
 #ifndef _DIGRAPH_H
 #define _DIGRAPH_H
 
+#include <map>
 #include <unordered_map>
 #include <random>
 #include <utility>
@@ -200,6 +201,25 @@ int rand_int(std::ranlux48_base& gen, int a, int b) {
 }
 
 /*
+ * Generates a random predecessor of v in the given graph, where 
+ * the probability of selecting a predecessor is proportional to
+ * the weight of the edge from the predecessor to v.
+ */
+int rand_predecessor(
+        int v, const std::set<int>& predecessors, 
+        const std::map<std::pair<int,int>, double> &weights, std::ranlux48_base& gen
+) {
+    std::vector<int> preds(predecessors.begin(), predecessors.end());
+    std::vector<int> pred_weights(predecessors.size());
+    for (size_t i = 0; i < predecessors.size(); i++) {
+        pred_weights[i] = weights.at(std::make_pair(preds[i], v));
+    }
+
+    std::discrete_distribution<int> distrib(pred_weights.begin(), pred_weights.end());
+    return preds[distrib(gen)];
+}
+
+/*
  * Generates a random spanning tree of the given graph using
  * Wilson's algorithm, where all edge weights are assumed to be 1.
  *
@@ -210,7 +230,9 @@ int rand_int(std::ranlux48_base& gen, int a, int b) {
  * Warning: The graph must be strongly connected.
  */
 template <class T>
-std::pair<digraph<T>, int> sample_random_spanning_tree(const digraph<T> &G, std::ranlux48_base& gen, int root = -1) {
+std::pair<digraph<T>, int> sample_random_spanning_tree(
+        const digraph<T> &G, const std::map<std::pair<int,int>, double> &weights, std::ranlux48_base& gen, int root = -1
+) {
     digraph<T> spanning_tree;
     for (int u : G.nodes()) {
         spanning_tree.add_vertex(G[u].data);
@@ -234,7 +256,7 @@ std::pair<digraph<T>, int> sample_random_spanning_tree(const digraph<T> &G, std:
                 throw std::runtime_error("Graph is not strongly connected");
             }
 
-            next[v] = *std::next(pred.begin(), rand_int(gen, 0, pred.size() - 1));
+            next[v] = *std::next(pred.begin(), rand_predecessor(v, pred, weights, gen));
             v = next[v];
         }
 
