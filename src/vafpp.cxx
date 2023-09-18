@@ -529,6 +529,8 @@ int main(int argc, char *argv[])
 
         if (program.is_subcommand_used(regress)) {
             std::cerr << regress;
+        } else if (program.is_subcommand_used(search)) {
+            std::cerr << search;
         } else {
             std::cerr << program;
         }
