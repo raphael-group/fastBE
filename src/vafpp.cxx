@@ -98,7 +98,6 @@ void subtree_prune_and_regraft(digraph<clone_tree_vertex>& tree, int u, int v, i
         int parent = *tree.predecessors(node_id).begin();
         s.push(parent);
     }
-
 }
 
 /*
@@ -125,8 +124,13 @@ double one_vafpp(
 ) {
     size_t nrows = F.size();
 
-    std::function<void(int)> one_vafpp_recursive = [&](int i) {
-        if (clone_tree[vertex_map.at(i)].data.valid) return;
+    std::stack<int> call_stack;
+    call_stack.push(root);
+    while(!call_stack.empty()) {
+        int i = call_stack.top();
+        call_stack.pop();
+
+        if (clone_tree[vertex_map.at(i)].data.valid) continue;
 
         std::vector<double>& w_ref = clone_tree[vertex_map.at(i)].data.w;
 
@@ -145,13 +149,23 @@ double one_vafpp(
             }
 
             clone_tree[vertex_map.at(i)].data.valid = true;
-            return;
+            continue;
         }
 
         /* Recurse at children. */
+        bool all_children_valid = true; 
         for (auto k : clone_tree.successors(vertex_map.at(i))) {
-            one_vafpp_recursive(clone_tree[k].data.id);
+            if (!clone_tree[k].data.valid) {
+                if (all_children_valid) {
+                    call_stack.push(i);
+                }
+
+                call_stack.push(clone_tree[k].data.id);
+                all_children_valid = false;
+            }
         }
+
+        if (!all_children_valid) continue;
 
         for (size_t j = 0; j < nrows; ++j) {
             PiecewiseLinearF g_out({w_ref[j]}, 0);
@@ -165,9 +179,7 @@ double one_vafpp(
         }
 
         clone_tree[vertex_map.at(i)].data.valid = true;
-    };
-
-    one_vafpp_recursive(root);
+    }
 
     double obj = 0;
     for (size_t j = 0; j < nrows; ++j) {
@@ -306,8 +318,12 @@ double update_sum_violation_matrix(
  */
 void deterministic_hill_climb(
     digraph<clone_tree_vertex>& clone_tree, const std::unordered_map<int, int>& vertex_map, 
-    const std::vector<std::vector<double>>& F, int root
+    const std::vector<std::vector<double>>& F, int root, int max_iterations
 ) {
+    if (max_iterations == -1) {
+        max_iterations = std::numeric_limits<int>::max();
+    }
+
     auto A = compute_sum_violation_matrix(clone_tree, vertex_map, F);
     float total_violation = 0;
     for (size_t i = 0; i < A.size(); ++i) {
@@ -350,7 +366,7 @@ void deterministic_hill_climb(
         std::pair<int, int> best_move = {-1, -1};
         int iterations = 0;
         for (auto [tv, u, v] : move_priority_queue) {
-            if (tv > best_score) break;
+            if (tv > best_score || iterations >= max_iterations) break;
 
             iterations++;
         
@@ -490,12 +506,7 @@ void perform_search(argparse::ArgumentParser search) {
 
     std::map<std::pair<int,int>, double> G_weights;
     for (auto [i, j] : ancestry_graph.edges()) {
-        //for (size_t k = 0; k < nrows; ++k) {
-            //G_weights[std::make_pair(i, j)] = std::max(frequency_matrix[k][j] - frequency_matrix[k][i], G_weights[std::make_pair(i, j)]);
-        //}
-
-        G_weights[std::make_pair(i, j)] = 1.0; // - G_weights[std::make_pair(i, j)];
-        spdlog::info("G[{}, {}] = {}", i, j, G_weights[std::make_pair(i, j)]);
+        G_weights[std::make_pair(i, j)] = 1.0;
     }
 
     spdlog::info("Number of edges in ancestry graph: {}", num_edges);
@@ -526,7 +537,7 @@ void perform_search(argparse::ArgumentParser search) {
                 auto [clone_tree_int, root] = sample_random_spanning_tree(ancestry_graph, G_weights, gen, assigned_root);
 
                 digraph<clone_tree_vertex> clone_tree = convert_clone_tree(clone_tree_int, nrows);
-                deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root);
+                deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root, ncols);
                 float obj = one_vafpp(clone_tree, identity_map, frequency_matrix, root);
 
                 {

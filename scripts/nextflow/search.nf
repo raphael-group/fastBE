@@ -56,7 +56,7 @@ process allele_minima {
         tuple file("inferred_tree.txt"), file("inferred_results.json"), file("timing.txt"), val(id)
 
     """
-    /usr/bin/time -v '${params.allele_minima}' search ${freq_matrix} -a 1 -s 500 --output inferred -t ${task.cpus} 2>> timing.txt
+    /usr/bin/time -v '${params.allele_minima}' search ${freq_matrix} -a 1 -s 64 --output inferred -t ${task.cpus} 2>> timing.txt
     """
 }
 
@@ -124,7 +124,7 @@ process pairtree {
         tuple file("results.npz"), file("best_tree.txt"), file("timing.txt"), val(id)
 
     """
-    /usr/bin/time -v '${params.pairtree_bin}' --params ${params_json} ${ssm} results.npz 2>> timing.txt
+    /usr/bin/time -v '${params.pairtree_bin}' --parallel 16 --params ${params_json} ${ssm} results.npz 2>> timing.txt
     python '${params.pairtree_parse_output}' results.npz --output best_tree.txt     
     """
 }
@@ -225,10 +225,10 @@ workflow {
     }
 
     // run Pairtree
-    simulation | create_pairtree_input | pairtree | map { results, best_tree, timing, id ->
-        outputPrefix = "${params.outputDir}/pairtree/${id}"
-        results.moveTo("${outputPrefix}_results.npz")
-        best_tree.moveTo("${outputPrefix}_best_tree.txt")
-        timing.moveTo("${outputPrefix}_timing.txt")
-    }
+    // simulation | create_pairtree_input | pairtree | map { results, best_tree, timing, id ->
+        // outputPrefix = "${params.outputDir}/pairtree/${id}"
+        // results.moveTo("${outputPrefix}_results.npz")
+        // best_tree.moveTo("${outputPrefix}_best_tree.txt")
+        // timing.moveTo("${outputPrefix}_timing.txt")
+    // }
 }

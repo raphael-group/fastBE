@@ -26,10 +26,11 @@ process allele_minima {
                                                                                                                                                                                        
     input:                                                                                                                                                                             
         tuple path(mut_clone_mapping), path(freq_matrix), path(variant_matrix),                                                                                     
-              path(total_matrix), val(samples), val(mutations), val(id)                                                                                         
+              path(total_matrix), path(samples), path(mutations), val(id)                                                                                         
                                                                                                                                                                                        
     output:                                                                                                                                                                            
-        tuple file("inferred_tree.txt"), file("inferred_results.json"), file("timing.txt"), val(id)                                                                                    
+        tuple file("inferred_tree.txt"), file("inferred_results.json"), file("timing.txt"), 
+        path(freq_matrix), path(samples), path(mutations), val(id)
                                                                                                                                                                                        
     """                                                                                                                                                                                
     /usr/bin/time -v '${params.allele_minima}' search ${freq_matrix} -a 1 -s 5000 --output inferred -t ${task.cpus} 2>> timing.txt                                                      
@@ -56,18 +57,21 @@ process pairtree {                                                              
 workflow {
   inputChannel = Channel.fromFilePairs("${params.proj_dir}/realdata/input/*.{ssm,params.json}") 
   // inputChannel | map {[it[1][0], it[1][1], it[0]]} | map {print it}
-  inputChannel | map {[it[1][0], it[1][1], it[0]]} | parse_pairtree | allele_minima | map { inferred_tree, inferred_results, timing, id ->                                                                                                  
+  inputChannel | map {[it[1][0], it[1][1], it[0]]} | parse_pairtree | allele_minima | map { inferred_tree, inferred_results, timing, freq_matrix, samples, mutations, id ->                                                                                                  
         output_prefix = "${params.output_dir}/allele_minima/${id}"                                                                                                                       
         inferred_tree.moveTo("${output_prefix}_inferred_tree.txt")                                                                                                                      
         inferred_results.moveTo("${output_prefix}_inferred_results.json")                                                                                                               
         timing.moveTo("${output_prefix}_timing.txt")  
+        samples.moveTo("${output_prefix}_samples.txt")
+        mutations.moveTo("${output_prefix}_mutations.txt")
+        freq_matrix.moveTo("${output_prefix}_frequency_matrix.txt")
   }
 
-  inputChannel | map {[it[1][0], it[1][1], it[0]]} | pairtree | map { inferred_results, inferred_tree, timing, id ->                                                                                                  
-        output_prefix = "${params.output_dir}/pairtree/${id}"                                                                                                                       
-        inferred_tree.moveTo("${output_prefix}_best_tree.txt")                                                                                                                      
-        inferred_results.moveTo("${output_prefix}_results.npz")                                                                                                               
-        timing.moveTo("${output_prefix}_timing.txt")  
-  }
+  // inputChannel | map {[it[1][0], it[1][1], it[0]]} | pairtree | map { inferred_results, inferred_tree, timing, id ->                                                                                                  
+        // output_prefix = "${params.output_dir}/pairtree/${id}"                                                                                                                       
+        // inferred_tree.moveTo("${output_prefix}_best_tree.txt")                                                                                                                      
+        // inferred_results.moveTo("${output_prefix}_results.npz")                                                                                                               
+        // timing.moveTo("${output_prefix}_timing.txt")  
+  // }
 
 }

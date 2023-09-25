@@ -127,14 +127,18 @@ def observe_frequency_matrix(variant_count_matrix, total_count_matrix, mutation_
     clone_mut = lambda c: clone_to_mutation_mapping[c]
 
     obs_frequency_matrix = np.zeros((variant_count_matrix.shape[0], len(clone_to_mutation_mapping.keys())))
+    collapsed_variant_matrix = np.zeros((variant_count_matrix.shape[0], len(clone_to_mutation_mapping.keys())))
+    collapsed_total_matrix   = np.zeros((variant_count_matrix.shape[0], len(clone_to_mutation_mapping.keys())))
     for s in range(obs_frequency_matrix.shape[0]):
         for clone in range(obs_frequency_matrix.shape[1]):
             variant_reads = sum([variant_count_matrix[s, m] for m in clone_mut(clone)])
             total_reads   = sum([total_count_matrix[s, m] for m in clone_mut(clone)])
             if total_reads > 0:
                 obs_frequency_matrix[s, clone] = variant_reads / total_reads
+            collapsed_variant_matrix[s, clone] = variant_reads
+            collapsed_total_matrix[s, clone]   = total_reads
 
-    return obs_frequency_matrix
+    return obs_frequency_matrix, collapsed_variant_matrix, collapsed_total_matrix
 
 def main():
     parser = argparse.ArgumentParser(description='Simulate a clonal matrix, usage matrix and read counts.')
@@ -160,13 +164,15 @@ def main():
             args.mutations, args.coverage
     )
 
-    f_hat = observe_frequency_matrix(variant_matrix, total_matrix, mutation_to_clone_mapping, args.clones)
+    f_hat, collapsed_variant_matrix, collapsed_total_matrix = observe_frequency_matrix(variant_matrix, total_matrix, mutation_to_clone_mapping, args.clones)
     
     np.savetxt(f'{args.output}_clonal_matrix.txt', clonal_matrix, fmt='%d')
     np.savetxt(f'{args.output}_usage_matrix.txt', usage_matrix, fmt='%.4f')
     np.savetxt(f'{args.output}_variant_matrix.txt', variant_matrix, fmt='%d')
     np.savetxt(f'{args.output}_total_matrix.txt', total_matrix, fmt='%d')
     np.savetxt(f'{args.output}_obs_frequency_matrix.txt', f_hat, fmt='%.4f')
+    np.savetxt(f'{args.output}_collapsed_variant_matrix.txt', collapsed_variant_matrix, fmt='%d')
+    np.savetxt(f'{args.output}_collapsed_total_matrix.txt', collapsed_total_matrix, fmt='%d')
 
     nx.write_adjlist(tree, f'{args.output}_tree.txt')
     

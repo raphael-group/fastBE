@@ -22,7 +22,7 @@ def draw_graph(adjacency_list_file, ax=None):
 
     labels = {}
     for node in T.nodes():
-        labels[node] = node + 1
+        labels[node] = node 
 
     nx.draw(T, pos, with_labels=False, arrows=True, ax=ax)
     nx.draw_networkx_labels(T, pos, labels, font_size=10, ax=ax)

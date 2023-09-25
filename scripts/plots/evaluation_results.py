@@ -27,25 +27,27 @@ algorithm_color_map = {
     'citup': sns.color_palette()[3]
 }
 
-def plot_matrix_error(df, output=None, xaxis='samples', xaxislabel='Number of Samples', rotate=False):
+hue_order = ['allele_minima', 'pairtree', 'calder', 'citup']
+
+def plot_matrix_error(df, output=None, xaxis='samples', xaxislabel='Number of Samples', rotate=False, hue_order=hue_order):
     fig, axes = plt.subplots(figsize=(8, 4), nrows=1, ncols=2)
 
-    sns.boxplot(data=df, x=xaxis, y='U_error', hue='algorithm', fliersize=0, ax=axes[0], palette=algorithm_color_map)
+    sns.boxplot(data=df, x=xaxis, y='U_error', hue='algorithm', fliersize=0, ax=axes[0], palette=algorithm_color_map, hue_order=hue_order)
     set_alpha(axes[0], 0.5)
     sns.stripplot(
         data=df, x=xaxis, y='U_error', hue='algorithm', dodge=True, jitter=True, marker='o', alpha=0.5, 
-        legend=False, ax=axes[0], palette=algorithm_color_map
+        legend=False, ax=axes[0], palette=algorithm_color_map, hue_order=hue_order
     )
 
     axes[0].set_xlabel(xaxislabel)
     axes[0].set_ylabel(r'$\frac{1}{mn}\|U - \hat{U}\|_1$')
     axes[0].get_legend().remove()
     
-    sns.boxplot(data=df, x=xaxis, y='F_error', hue='algorithm', fliersize=0, ax=axes[1], palette=algorithm_color_map)
+    sns.boxplot(data=df, x=xaxis, y='F_error', hue='algorithm', fliersize=0, ax=axes[1], palette=algorithm_color_map, hue_order=hue_order)
     set_alpha(axes[1], 0.5)
     sns.stripplot(
         data=df, x=xaxis, y='F_error', hue='algorithm', dodge=True, jitter=True, marker='o', alpha=0.5, legend=False, ax=axes[1],
-        palette=algorithm_color_map
+        palette=algorithm_color_map, hue_order=hue_order
     )
 
     axes[1].set_xlabel(xaxislabel)
@@ -69,20 +71,28 @@ def plot_matrix_error(df, output=None, xaxis='samples', xaxislabel='Number of Sa
     if output:
         fig.savefig(output, transparent=True)
 
-def plot_fpr_fnr(df, output=None, xaxis='clones', xaxislabel='Number of Clones', rotate=False):
+def plot_fpr_fnr(df, output=None, xaxis='clones', xaxislabel='Number of Clones', rotate=False, hue_order=hue_order):
     fig, axes = plt.subplots(figsize=(8, 4), nrows=1, ncols=2)
 
-    sns.boxplot(data=df, x=xaxis, y='false_positive_rate', hue='algorithm', fliersize=0, ax=axes[0], palette=algorithm_color_map)
+    sns.boxplot(data=df, x=xaxis, y='false_positive_rate', hue='algorithm', fliersize=0, ax=axes[0], palette=algorithm_color_map, hue_order=hue_order)
     set_alpha(axes[0], 0.5)
 
-    sns.stripplot(data=df, x=xaxis, y='false_positive_rate', hue='algorithm', dodge=True, jitter=True, marker='o', alpha=0.5, legend=False, ax=axes[0], palette=algorithm_color_map)
+    sns.stripplot(
+        data=df, x=xaxis, y='false_positive_rate', hue='algorithm', dodge=True, 
+        jitter=True, marker='o', alpha=0.5, legend=False, ax=axes[0], palette=algorithm_color_map, 
+        hue_order=hue_order
+    )
     axes[0].set_xlabel(xaxislabel)
     axes[0].set_ylabel('False Positive Rate')
     axes[0].get_legend().remove()
 
-    sns.boxplot(data=df, x=xaxis, y='false_negative_rate', hue='algorithm', fliersize=0, ax=axes[1], palette=algorithm_color_map)
+    sns.boxplot(data=df, x=xaxis, y='false_negative_rate', hue='algorithm', fliersize=0, ax=axes[1], palette=algorithm_color_map, hue_order=hue_order)
     set_alpha(axes[1], 0.5)
-    sns.stripplot(data=df, x=xaxis, y='false_negative_rate', hue='algorithm', dodge=True, jitter=True, marker='o', alpha=0.5, legend=False, ax=axes[1], palette=algorithm_color_map)
+    sns.stripplot(
+        data=df, x=xaxis, y='false_negative_rate', hue='algorithm', dodge=True, 
+        jitter=True, marker='o', alpha=0.5, legend=False, ax=axes[1], palette=algorithm_color_map,
+        hue_order=hue_order
+    )
     axes[1].set_xlabel(xaxislabel)
     axes[1].set_ylabel('False Negative Rate')
     axes[1].legend(title='Algorithm')
@@ -140,7 +150,8 @@ def main():
     
     plot_fpr_fnr(
         df[~df['algorithm'].isin(['calder', 'citup'])], 
-        output=args.output + 'large_fpr_fnr.pdf'
+        output=args.output + 'large_fpr_fnr.pdf',
+        hue_order=['allele_minima', 'pairtree']
     )
 
     plot_fpr_fnr(
@@ -167,21 +178,34 @@ def main():
         df[~df['algorithm'].isin(['calder', 'citup'])],
         output=args.output + 'large_matrix_error.pdf',
         xaxis='clones',
-        xaxislabel='Number of Clones'
+        xaxislabel='Number of Clones',
+        hue_order=['allele_minima', 'pairtree']
     )
 
     fig, axes = plt.subplots(figsize=(8, 3.5), nrows=1, ncols=2)
     axes = axes[::-1]
-    sns.boxplot(data=df[df['algorithm'].isin(['allele_minima', 'pairtree']) & (df['clones'] > 10)], x='clones', y='f1_score', hue='algorithm', fliersize=0, ax=axes[0], palette=algorithm_color_map)
+    sns.boxplot(
+        data=df[df['algorithm'].isin(['allele_minima', 'pairtree']) & (df['clones'] > 10)], x='clones', 
+        y='f1_score', hue='algorithm', fliersize=0, ax=axes[0], palette=algorithm_color_map,
+        hue_order=['allele_minima', 'pairtree']
+    )
     set_alpha(axes[0], 0.5)
 
-    sns.stripplot(data=df[df['algorithm'].isin(['allele_minima', 'pairtree']) & (df['clones'] > 10)], x='clones', y='f1_score', hue='algorithm', dodge=True, jitter=True, marker='o', alpha=0.5, legend=False, ax=axes[0], palette=algorithm_color_map)
+    sns.stripplot(
+        data=df[df['algorithm'].isin(['allele_minima', 'pairtree']) & (df['clones'] > 10)], x='clones', 
+        y='f1_score', hue='algorithm', dodge=True, jitter=True, marker='o', alpha=0.5, legend=False, ax=axes[0], 
+        palette=algorithm_color_map, hue_order=['allele_minima', 'pairtree']
+    )
     axes[0].set_xlabel('Number of Clones')
     axes[0].set_ylabel('F1 Score')
 
-    sns.boxplot(data=df[df['clones'] <= 10], x='clones', y='f1_score', hue='algorithm', fliersize=0, ax=axes[1], palette=algorithm_color_map)
+    sns.boxplot(data=df[df['clones'] <= 10], x='clones', y='f1_score', hue='algorithm', fliersize=0, ax=axes[1], palette=algorithm_color_map, hue_order=hue_order)
     set_alpha(axes[1], 0.5)
-    sns.stripplot(data=df[df['clones'] <= 10], x='clones', y='f1_score', hue='algorithm', dodge=True, jitter=True, marker='o', alpha=0.5, legend=False, ax=axes[1], palette=algorithm_color_map)
+    sns.stripplot(
+        data=df[df['clones'] <= 10], x='clones', y='f1_score', hue='algorithm', 
+        dodge=True, jitter=True, marker='o', alpha=0.5, legend=False, ax=axes[1], palette=algorithm_color_map,
+        hue_order=hue_order
+    )
     axes[1].set_xlabel('Number of Clones')
     axes[1].set_ylabel('F1 Score')
     axes[1].legend(title='Algorithm')
@@ -198,23 +222,24 @@ def main():
     axes = [ax]
     sns.boxplot(
         data=df[df['algorithm'].isin(['allele_minima', 'pairtree'])], x='clone_and_sample', y='elapsed_time', 
-        hue='algorithm', fliersize=0, palette=algorithm_color_map, ax=axes[0]
+        hue='algorithm', fliersize=0, palette=algorithm_color_map, ax=axes[0], hue_order=['allele_minima', 'pairtree']
     )
     set_alpha(axes[0], 0.5)
     sns.stripplot(
         data=df[df['algorithm'].isin(['allele_minima', 'pairtree'])], x='clone_and_sample', y='elapsed_time', 
-        hue='algorithm', dodge=True, jitter=True, marker='o', alpha=0.5, legend=False, palette=algorithm_color_map, ax=axes[0]
+        hue='algorithm', dodge=True, jitter=True, marker='o', alpha=0.5, legend=False, palette=algorithm_color_map, ax=axes[0],
+        hue_order=['allele_minima', 'pairtree']
     )
     axes[0].set(yscale='log')
     axes[0].set_xlabel('(Number of Clones, Number of Samples)')
-    axes[0].set_ylabel('log(Elapsed Time (s))')
+    axes[0].set_ylabel('Elapsed Time (s)')
 
     for tick in axes[0].get_xticklabels():
         tick.set_rotation(60)
 
     handles, labels = axes[0].get_legend_handles_labels()
     labels = list(map(lambda x: algorithm_name_map[x], labels))
-    axes[0].legend(handles, labels, title='Algorithm', loc='upper right')
+    axes[0].legend(handles, labels, title='Algorithm', loc='lower right')
 
     fig.tight_layout()
     fig.savefig(args.output + '_elapsed_time.pdf', transparent=True)
