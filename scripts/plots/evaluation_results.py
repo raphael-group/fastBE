@@ -154,6 +154,23 @@ def main():
         hue_order=['allele_minima', 'pairtree']
     )
 
+    df['samples_over_clones'] = (df['samples'] / df['clones']).round(2)
+    plot_fpr_fnr(
+        df[(~df['algorithm'].isin(['calder', 'citup'])) & (df['clones'] >= 30)], 
+        output=args.output + '_large_fpr_fnr_versus_clones_over_samples.pdf',
+        xaxis='samples_over_clones',
+        xaxislabel='Number of Samples / Number of Clones',
+        hue_order=['allele_minima', 'pairtree']
+    )
+
+    plot_fpr_fnr(
+        df[(~df['algorithm'].isin(['calder', 'citup'])) & (df['clones'] >= 30)], 
+        output=args.output + '_large_fpr_fnr_versus_samples.pdf',
+        xaxis='samples',
+        xaxislabel='Number of Samples',
+        hue_order=['allele_minima', 'pairtree']
+    )
+
     plot_fpr_fnr(
         df[df['clones'] <= 10], 
         output=args.output + '_10clones_fpr_fnr.pdf'
