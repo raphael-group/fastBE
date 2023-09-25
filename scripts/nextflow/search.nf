@@ -44,7 +44,7 @@ process create_sim {
 
 process allele_minima {
     cpus 16
-    memory '2 GB'
+    memory '4 GB'
     time '24h'
     errorStrategy 'ignore'
 
@@ -56,7 +56,7 @@ process allele_minima {
         tuple file("inferred_tree.txt"), file("inferred_results.json"), file("timing.txt"), val(id)
 
     """
-    /usr/bin/time -v '${params.allele_minima}' search ${freq_matrix} -a 1 -s 64 --output inferred -t ${task.cpus} 2>> timing.txt
+    /usr/bin/time -v '${params.allele_minima}' search ${freq_matrix} -a 1 -s 128 --output inferred -t ${task.cpus} 2>> timing.txt
     """
 }
 
