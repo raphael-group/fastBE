@@ -211,7 +211,7 @@ int rand_predecessor(
 ) {
     std::vector<int> preds(predecessors.begin(), predecessors.end());
     std::vector<int> pred_weights(predecessors.size());
-    for (size_t i = 0; i < predecessors.size(); i++) {
+    for (int i = 0; i < predecessors.size(); i++) {
         pred_weights[i] = weights.at(std::make_pair(preds[i], v));
     }
 

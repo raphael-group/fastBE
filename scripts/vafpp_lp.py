@@ -118,7 +118,10 @@ def one_vafpp_linear_program(B, F):
     model.setObjective(Z.sum(), GRB.MINIMIZE)
     model.optimize()
 
-    return model.objVal, model.Runtime
+    # grab U from the model
+    U_hat = np.array([U[k, :].X for k in range(m)])
+
+    return model.objVal, model.Runtime, U_hat
 
 """
 Given a frequency matrix $F$ and a clonal matrix $B$, this function
@@ -191,7 +194,7 @@ if __name__ == '__main__':
     results = {}
 
     start = time.time()
-    obj1, gurobi_time = one_vafpp_linear_program(B, F)
+    obj1, gurobi_time, U_hat = one_vafpp_linear_program(B, F)
     end = time.time()
 
     results["gurobi_lp_time_with_building"] = end - start
@@ -223,3 +226,5 @@ if __name__ == '__main__':
 
     with open(f"{args.output}_results.json", 'w') as f:
         json.dump(results, f, indent=4)
+
+    np.savetxt(f"{args.output}_usage_matrix.txt", U_hat, delimiter=" ", fmt="%.4f")

@@ -7,6 +7,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('somatic_mutations', help='Somatic mutations (.ssm) file', type=str)
     parser.add_argument('params_json', help='JSON file containing parameters for Pairtree.', type=str)
+    parser.add_argument('--append', help='Append all ones column to front of frequency matrix.', action='store_true')
     parser.add_argument('--output', help='Prefix for output files.', type=str, required=True)
     return parser.parse_args()
 
@@ -22,10 +23,20 @@ if __name__ == "__main__":
     variant_matrix_rows = []
     total_matrix_rows = []
     for mutation_id in mutation_ids:
-        variant_matrix_row = somatic_mutations.loc[mutation_id].var_reads.split(',')
-        variant_matrix_row = np.array(list(map(int, variant_matrix_row)))
-        total_matrix_row = somatic_mutations.loc[mutation_id].total_reads.split(',')
-        total_matrix_row = np.array(list(map(int, total_matrix_row)))
+        var_reads = somatic_mutations.loc[mutation_id].var_reads
+        if type(var_reads) == np.int64:
+            variant_matrix_row = np.array([var_reads])
+        else:
+            variant_matrix_row = var_reads.split(',')
+            variant_matrix_row = np.array(list(map(int, variant_matrix_row)))
+
+        total_reads = somatic_mutations.loc[mutation_id].total_reads
+        if type(total_reads) == np.int64:
+            total_matrix_row = np.array([total_reads])
+        else:
+            total_matrix_row = total_reads.split(',')
+            total_matrix_row = np.array(list(map(int, total_matrix_row)))
+
         variant_matrix_rows.append(variant_matrix_row)
         total_matrix_rows.append(total_matrix_row)
 
@@ -65,6 +76,9 @@ if __name__ == "__main__":
         frequency_matrix_cols.append(variant_col_sum / total_col_sum)
 
     frequency_matrix = np.vstack(frequency_matrix_cols).T
+
+    if args.append:
+        frequency_matrix = np.hstack((np.ones((frequency_matrix.shape[0], 1)), frequency_matrix))
 
     np.savetxt(f'{args.output}_frequency_matrix.txt', frequency_matrix, fmt='%.4f')
     print(frequency_matrix.shape)

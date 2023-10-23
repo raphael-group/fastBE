@@ -202,29 +202,42 @@ double one_vafpp(
  *  - clone_tree: A clone tree represented as a digraph.
  *  - vertex_map: A map from the columns of the frequency matrix to the 
  *    vertices of the clone tree.
+ *  - columns: A vector of column indices to consider.
  *  - F: A frequency matrix represented as a 2D vector.
+ *
+ * Requirement:
+ *  - The selected `columns` must coincide with the vertices of the clone tree.
 */
-double one_vafpp(const digraph<int>& clone_tree, const std::unordered_map<int, int>& vertex_map, const std::vector<std::vector<double>>& F, int root) {
+double one_vafpp(
+    const digraph<int>& clone_tree, const std::unordered_map<int, int>& vertex_map, 
+    const std::vector<std::vector<double>>& F, const std::vector<int>& columns,
+    int root
+) {
     size_t nrows = F.size();
-    size_t ncols = F[0].size();
 
-    std::vector<std::vector<double>> W(nrows, std::vector<double>(ncols, 0.0));
+    std::vector<std::vector<double>> W(nrows, std::vector<double>(columns.size(), 0.0));
 
     for (size_t j = 0; j < nrows; ++j) {
-        for (size_t i = 0; i < ncols; ++i) {
-            W[j][i] = F[j][i];
-            for (auto k : clone_tree.successors(vertex_map.at(i))) {
+        for (size_t i = 0; i < columns.size(); ++i) {
+            W[j][i] = F[j][columns[i]];
+            for (auto k : clone_tree.successors(vertex_map.at(columns[i]))) {
                 W[j][i] -= F[j][clone_tree[k].data];
             }
         }
     }
 
+    std::unordered_map<int, int> columns_inv(columns.size());
+    for (size_t i = 0; i < columns.size(); ++i) {
+        columns_inv[columns[i]] = i;
+    }
+
+    // i corresponds to column we are at in F!
     std::function<PiecewiseLinearF(size_t, size_t)> one_vafpp_recursive = [&](size_t j, size_t i) {
         if (clone_tree.out_degree(vertex_map.at(i)) == 0) {
-            return PiecewiseLinearF({W[j][i]}, 0); 
+            return PiecewiseLinearF({W[j][columns_inv[i]]}, 0); 
         }
 
-        PiecewiseLinearF g_out({W[j][i]}, 0);
+        PiecewiseLinearF g_out({W[j][columns_inv[i]]}, 0);
         for (auto k : clone_tree.successors(vertex_map.at(i))) {
             auto f = one_vafpp_recursive(j, clone_tree[k].data);
             f.compute_minimizer();
@@ -243,6 +256,45 @@ double one_vafpp(const digraph<int>& clone_tree, const std::unordered_map<int, i
     }
 
     return -1 * obj;
+}
+
+digraph<int> stepwise_addition(
+    const std::vector<std::vector<double>>& F,
+    const std::vector<int> permutation
+) {
+    digraph<int> clone_tree;
+    std::unordered_map<int, int> vertex_map;
+    std::vector<int> columns;
+    for (auto v : permutation) {
+        columns.push_back(v);
+        if (!clone_tree.nodes().size()) {
+            int id = clone_tree.add_vertex(v);
+            vertex_map[v] = id;
+            continue;
+        }
+
+        double min_obj = std::numeric_limits<double>::infinity();
+        int min_u = -1;
+        for (auto u : clone_tree.nodes()) {
+            digraph<int> clone_tree_copy = clone_tree;
+            int id = clone_tree_copy.add_vertex(v);
+            clone_tree_copy.add_edge(u, id);
+            vertex_map[v] = id;
+            double obj = one_vafpp(clone_tree_copy, vertex_map, F, columns, permutation[0]);
+            if (obj < min_obj) {
+                min_obj = obj;
+                min_u = u;
+            }
+
+            vertex_map.erase(v);
+        }
+
+        int id = clone_tree.add_vertex(v);
+        clone_tree.add_edge(min_u, id);
+        vertex_map[v] = id;
+    }
+
+    return clone_tree;
 }
 
 /*
@@ -337,6 +389,7 @@ void deterministic_hill_climb(
      *    - total_violation: at the beginning and end of every iteration is equal to the
      *    total violation of the sum condition.
      */
+    int count = 0;
     while (true) {
         /* 
          * Construct a priority queue of all possible moves, ranked by 
@@ -355,10 +408,11 @@ void deterministic_hill_climb(
                 int parent = *clone_tree.predecessors(u).begin();
                 subtree_prune_and_regraft(clone_tree, u, v, root);
                 total_violation += update_sum_violation_matrix(clone_tree, vertex_map, F, A, {v, parent});
+                total_violation += update_sum_violation_matrix(clone_tree, vertex_map, F, A, {clone_tree[v].data.id, clone_tree[parent].data.id});
                 move_priority_queue.insert({total_violation, u, v});
 
                 subtree_prune_and_regraft(clone_tree, u, parent, root);
-                total_violation += update_sum_violation_matrix(clone_tree, vertex_map, F, A, {v, parent});
+                total_violation += update_sum_violation_matrix(clone_tree, vertex_map, F, A, {clone_tree[v].data.id, clone_tree[parent].data.id});
             }
         }
 
@@ -372,11 +426,11 @@ void deterministic_hill_climb(
         
             int parent = *clone_tree.predecessors(u).begin();
             subtree_prune_and_regraft(clone_tree, u, v, root);
-            total_violation += update_sum_violation_matrix(clone_tree, vertex_map, F, A, {v, parent});
+            total_violation += update_sum_violation_matrix(clone_tree, vertex_map, F, A, {clone_tree[v].data.id, clone_tree[parent].data.id});
 
             float score = one_vafpp(clone_tree, vertex_map, F, root);
             subtree_prune_and_regraft(clone_tree, u, parent, root);
-            total_violation += update_sum_violation_matrix(clone_tree, vertex_map, F, A, {v, parent});
+            total_violation += update_sum_violation_matrix(clone_tree, vertex_map, F, A, {clone_tree[v].data.id, clone_tree[parent].data.id});
 
             if (score < best_score) {
                 best_score = score;
@@ -385,17 +439,19 @@ void deterministic_hill_climb(
         }
 
         if (best_move.first == -1) {
+            spdlog::info("No SPR moves can improve the score -- local minimum found.");
             break;
         }
-
-        spdlog::info("Best score is {}", best_score);
 
         auto [u, v] = best_move;
         subtree_prune_and_regraft(clone_tree, u, v, root);
 
         int parent = *clone_tree.predecessors(u).begin();
         total_violation += update_sum_violation_matrix(clone_tree, vertex_map, F, A, {v, parent});
+        count++;
     }
+
+    spdlog::info("Hill climbing iterations: {}", count);
 }
 
 /* 
@@ -449,10 +505,15 @@ void perform_regression(argparse::ArgumentParser regress) {
     auto [clone_tree, vertex_map] = parse_adjacency_list(regress.get<std::string>("clone_tree"));
     std::vector<std::vector<double>> frequency_matrix = parse_frequency_matrix(regress.get<std::string>("frequency_matrix"));
 
+    std::vector<int> columns(vertex_map.size());
+    for (auto [v, i] : vertex_map) {
+        columns[i] = v;
+    }
+
     auto start = std::chrono::high_resolution_clock::now();
-    double obj = one_vafpp(clone_tree, vertex_map, frequency_matrix, 0);
+    double obj = one_vafpp(clone_tree, vertex_map, frequency_matrix, columns, 0);
     for (size_t i = 0; i < regress.get<size_t>("num_reps") - 1; ++i) {
-        one_vafpp(clone_tree, vertex_map, frequency_matrix, 0);
+        one_vafpp(clone_tree, vertex_map, frequency_matrix, columns, 0);
     }
 
     auto end = std::chrono::high_resolution_clock::now();
@@ -534,11 +595,30 @@ void perform_search(argparse::ArgumentParser search) {
                 size_t i = counter++;
                 if (i >= num_samples) return;  // no more work to do
 
-                auto [clone_tree_int, root] = sample_random_spanning_tree(ancestry_graph, G_weights, gen, assigned_root);
+                /* Create a random tree using stepwise addition. */
+                std::vector<int> permutation(ncols);
+                std::iota(permutation.begin(), permutation.end(), 0);
+                std::shuffle(permutation.begin(), permutation.end(), gen);
+                auto it = std::find(permutation.begin(), permutation.end(), assigned_root);
+                std::iter_swap(permutation.begin(), it);
 
+                auto clone_tree_int_stepwise = stepwise_addition(frequency_matrix, permutation);
+                digraph<clone_tree_vertex> clone_tree_stepwise = convert_clone_tree(clone_tree_int_stepwise, nrows);
+                std::unordered_map<int, int> vertex_map;
+                for (auto v : clone_tree_stepwise.nodes()) {
+                    vertex_map[clone_tree_stepwise[v].data.id] = v;
+                }
+
+                deterministic_hill_climb(clone_tree_stepwise, vertex_map, frequency_matrix, assigned_root, ncols);
+                float obj_stepwise = one_vafpp(clone_tree_stepwise, vertex_map, frequency_matrix, assigned_root);
+
+                /* Create a random tree by picking a random spanning tree of G. */
+                auto [clone_tree_int, root] = sample_random_spanning_tree(ancestry_graph, G_weights, gen, assigned_root);
                 digraph<clone_tree_vertex> clone_tree = convert_clone_tree(clone_tree_int, nrows);
                 deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root, ncols);
                 float obj = one_vafpp(clone_tree, identity_map, frequency_matrix, root);
+
+                spdlog::info("Stepwise objective: {}, Random objective: {}", obj_stepwise, obj);
 
                 {
                     std::lock_guard<std::mutex> lock(mtx);  // lock the mutex to protect shared resources

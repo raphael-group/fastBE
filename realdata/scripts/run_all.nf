@@ -3,7 +3,7 @@ params.scripts_dir = "${params.proj_dir}/realdata/scripts"
 params.output_dir = "${params.proj_dir}/realdata"
 
 params.pairtree_bin  = "${params.proj_dir}/dependencies/pairtree/bin/pairtree"
-params.pairtree_parse_output = "${params.proj_dir}/scripts/parse_pairtree_output.py"                                                                                                   
+params.pairtree_parse_output = "${params.scripts_dir}/parse_pairtree_output.py"                                                                                                   
 
 params.allele_minima = "${params.proj_dir}/build/src/vafpp"                                                                                                                            
 
@@ -15,7 +15,7 @@ process parse_pairtree {
           file("exp_total_matrix.txt"), file("exp_samples.txt"), file("exp_mutations.txt"), val(id)
 
   """
-  python '${params.scripts_dir}/pairtree_input_parse.py' ${ssm} ${params_json} --output exp
+  python '${params.scripts_dir}/pairtree_input_parse.py' ${ssm} ${params_json} --append --output exp
   """
 }
 
@@ -56,7 +56,8 @@ process pairtree {                                                              
 
 workflow {
   inputChannel = Channel.fromFilePairs("${params.proj_dir}/realdata/input/*.{ssm,params.json}") 
-  // inputChannel | map {[it[1][0], it[1][1], it[0]]} | map {print it}
+  inputChannel = inputChannel | filter {it[0].contains("CSC28") || it[0].contains("POP66")}
+  //inputChannel | map {[it[1][0], it[1][1], it[0]]} | map {print it}
   inputChannel | map {[it[1][0], it[1][1], it[0]]} | parse_pairtree | allele_minima | map { inferred_tree, inferred_results, timing, freq_matrix, samples, mutations, id ->                                                                                                  
         output_prefix = "${params.output_dir}/allele_minima/${id}"                                                                                                                       
         inferred_tree.moveTo("${output_prefix}_inferred_tree.txt")                                                                                                                      
@@ -67,11 +68,10 @@ workflow {
         freq_matrix.moveTo("${output_prefix}_frequency_matrix.txt")
   }
 
-  // inputChannel | map {[it[1][0], it[1][1], it[0]]} | pairtree | map { inferred_results, inferred_tree, timing, id ->                                                                                                  
-        // output_prefix = "${params.output_dir}/pairtree/${id}"                                                                                                                       
-        // inferred_tree.moveTo("${output_prefix}_best_tree.txt")                                                                                                                      
-        // inferred_results.moveTo("${output_prefix}_results.npz")                                                                                                               
-        // timing.moveTo("${output_prefix}_timing.txt")  
-  // }
-
+  inputChannel | map {[it[1][0], it[1][1], it[0]]} | pairtree | map { inferred_results, inferred_tree, timing, id ->                                                                                                  
+        output_prefix = "${params.output_dir}/pairtree/${id}"                                                                                                                       
+        inferred_tree.moveTo("${output_prefix}_best_tree.txt")                                                                                                                      
+        inferred_results.moveTo("${output_prefix}_results.npz")                                                                                                               
+        timing.moveTo("${output_prefix}_timing.txt")  
+  }
 }
