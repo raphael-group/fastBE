@@ -8,10 +8,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     result = np.load(args.result)
-    print(list(result['llh'][:10]))
     best_tree_parents = result['struct'][0]
 
-    print(result)
     print(best_tree_parents)
     adjacency_list = [[i] for i in range(len(best_tree_parents) + 1)]
     for i in range(len(best_tree_parents)):
@@ -20,6 +18,6 @@ if __name__ == '__main__':
 
     # write adjacency list to NX format
     with open(args.output, 'w') as f:
-        for row in adjacency_list[1:]:
-            f.write(' '.join([str(x - 1) for x in row]) + '\n')
+        for row in adjacency_list:
+            f.write(' '.join([str(x) for x in row]) + '\n')
 

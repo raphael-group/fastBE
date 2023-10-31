@@ -14,7 +14,7 @@ def set_alpha(ax, alpha):
 
 algorithm_name_map = {
     'pairtree': 'Pairtree',
-    'allele_minima': 'AlleleMinima',
+    'allele_minima': 'fastBE',
     'calder': 'CALDER',
     'citup': 'CITUP'
 }
@@ -274,7 +274,31 @@ def main():
     axes[0].legend(handles, labels, title='Algorithm', loc='lower right')
 
     fig.tight_layout()
-    fig.savefig(args.output + '_elapsed_time.pdf', transparent=True)
+    fig.savefig(args.output + '_elapsed_time_large.pdf', transparent=True)
+
+    fig, ax = plt.subplots(figsize=(4, 3.5), nrows=1, ncols=1)
+    axes = [ax]
+    sns.boxplot(
+        data=df[df['algorithm'].isin(['allele_minima', 'pairtree']) & (df['clones'] >= 30)], x='samples', y='elapsed_time', 
+        hue='algorithm', fliersize=0, palette=algorithm_color_map, ax=axes[0]
+    )
+
+    set_alpha(axes[0], 0.5)
+    sns.stripplot(
+        data=df[df['algorithm'].isin(['allele_minima', 'pairtree']) & (df['clones'] >= 30)], x='samples', y='elapsed_time', 
+        hue='algorithm', dodge=True, jitter=True, marker='o', alpha=0.5, legend=False, palette=algorithm_color_map, ax=axes[0]
+    )
+
+    handles, labels = axes[0].get_legend_handles_labels()
+    labels = list(map(lambda x: algorithm_name_map[x], labels))
+    axes[0].legend(handles, labels, title='Algorithm', loc='lower right')
+
+    axes[0].set(yscale='log')
+    axes[0].set_xlabel('Number of Samples')
+    axes[0].set_ylabel('Elapsed Time (s)')
+
+    fig.tight_layout()
+    fig.savefig(args.output + '_elapsed_time_small.pdf', transparent=True)
     
     print(df[df['clones'] <= 10].groupby(['algorithm', 'clones'])['f1_score'].mean())
     print(df[df['clones'] > 10].groupby(['algorithm', 'clones'])['f1_score'].mean())
