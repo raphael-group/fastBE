@@ -54,8 +54,8 @@ $\ell_1$-regression problem, both of which are defined in
 our manuscript. 
 
 The `search` mode takes as input an $m \times n$ frequency matrix $F$ and outputs
-an $n$-clonal tree that best fits the frequency matrix. *Important note: the search
-command requires a root vertex specified with the `-f/--assigned-root` flag.*
+an $n$-clonal tree that best fits the frequency matrix. **Important note: the search
+command requires a root vertex specified with the `-f/--assigned-root` flag.**
 By default this root vertex is set to be $0$. When the root vertex is unknown,
 it suffices to append an extra column to the beginning of the frequency matrix 
 and specify the root as $0$.
@@ -63,7 +63,7 @@ and specify the root as $0$.
 The `regress` mode
 takes as input an $m \times n$ frequency matrix $F$ and an $n$-clonal
 tree $\mathcal{T}$ and outputs the minimum value of 
-`\lVert F - UB_{\mathcal{T}} \rVert_1` over all usage matrices $U$.
+$\lVert F - UB_{\mathcal{T}} \rVert_1$ over all usage matrices $U$.
 
 ### Input format
 
