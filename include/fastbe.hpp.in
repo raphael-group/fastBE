@@ -1,0 +1,7 @@
+#ifndef _FASTBE_H
+#define _FASTBE_H
+
+#define FASTBE_VERSION_MAJOR @fastbe_VERSION_MAJOR@
+#define FASTBE_VERSION_MINOR @fastbe_VERSION_MINOR@
+
+#endif

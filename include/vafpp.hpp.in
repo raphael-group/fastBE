@@ -1,7 +1,0 @@
-#ifndef _VAFPP_H
-#define _VAFPP_H
-
-#define VAFPP_VERSION_MAJOR @vafpp_VERSION_MAJOR@
-#define VAFPP_VERSION_MINOR @vafpp_VERSION_MINOR@
-
-#endif

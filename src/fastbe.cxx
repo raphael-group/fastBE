@@ -4,7 +4,7 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <argparse/argparse.hpp>
 
-#include <vafpp.hpp>
+#include <fastbe.hpp>
 #include <digraph.hpp>
 #include <piecewiselinearf.hpp>
 
@@ -55,7 +55,7 @@ struct clone_tree_vertex {
  * Converts a clone tree with integer vertex labels to a clone tree
  * with clone_tree_vertex vertex labels.
  *
- * To be used to avoid recomputation when calling `one_vafpp` multiple 
+ * To be used to avoid recomputation when calling `one_fastbe` multiple 
  * times with perturbations of the same clone tree.
  */
 digraph<clone_tree_vertex> convert_clone_tree(const digraph<int>& clone_tree, size_t nrows) {
@@ -116,7 +116,7 @@ void subtree_prune_and_regraft(digraph<clone_tree_vertex>& tree, int u, int v, i
  *    vertices of the clone tree.
  *  - F: A frequency matrix represented as a 2D vector.
 */
-double one_vafpp(
+double one_fastbe(
     digraph<clone_tree_vertex>& clone_tree, 
     const std::unordered_map<int, int>& vertex_map, 
     const std::vector<std::vector<double>>& F, 
@@ -208,7 +208,7 @@ double one_vafpp(
  * Requirement:
  *  - The selected `columns` must coincide with the vertices of the clone tree.
 */
-double one_vafpp(
+double one_fastbe(
     const digraph<int>& clone_tree, const std::unordered_map<int, int>& vertex_map, 
     const std::vector<std::vector<double>>& F, const std::vector<int>& columns,
     int root
@@ -232,14 +232,14 @@ double one_vafpp(
     }
 
     // i corresponds to column we are at in F!
-    std::function<PiecewiseLinearF(size_t, size_t)> one_vafpp_recursive = [&](size_t j, size_t i) {
+    std::function<PiecewiseLinearF(size_t, size_t)> one_fastbe_recursive = [&](size_t j, size_t i) {
         if (clone_tree.out_degree(vertex_map.at(i)) == 0) {
             return PiecewiseLinearF({W[j][columns_inv[i]]}, 0); 
         }
 
         PiecewiseLinearF g_out({W[j][columns_inv[i]]}, 0);
         for (auto k : clone_tree.successors(vertex_map.at(i))) {
-            auto f = one_vafpp_recursive(j, clone_tree[k].data);
+            auto f = one_fastbe_recursive(j, clone_tree[k].data);
             f.compute_minimizer();
             g_out.addInPlace(std::move(f));
         }
@@ -249,7 +249,7 @@ double one_vafpp(
 
     double obj = 0;
     for (size_t j = 0; j < nrows; ++j) {
-        auto f = one_vafpp_recursive(j, root);
+        auto f = one_fastbe_recursive(j, root);
         f.compute_minimizer();
         f.addInPlace(PiecewiseLinearF({1 - F[j][0]}, 0));
         obj += f.minimizer();
@@ -280,7 +280,7 @@ digraph<int> stepwise_addition(
             int id = clone_tree_copy.add_vertex(v);
             clone_tree_copy.add_edge(u, id);
             vertex_map[v] = id;
-            double obj = one_vafpp(clone_tree_copy, vertex_map, F, columns, permutation[0]);
+            double obj = one_fastbe(clone_tree_copy, vertex_map, F, columns, permutation[0]);
             if (obj < min_obj) {
                 min_obj = obj;
                 min_u = u;
@@ -416,7 +416,7 @@ void deterministic_hill_climb(
             }
         }
 
-        float best_score = one_vafpp(clone_tree, vertex_map, F, root);
+        float best_score = one_fastbe(clone_tree, vertex_map, F, root);
         std::pair<int, int> best_move = {-1, -1};
         int iterations = 0;
         for (auto [tv, u, v] : move_priority_queue) {
@@ -428,7 +428,7 @@ void deterministic_hill_climb(
             subtree_prune_and_regraft(clone_tree, u, v, root);
             total_violation += update_sum_violation_matrix(clone_tree, vertex_map, F, A, {clone_tree[v].data.id, clone_tree[parent].data.id});
 
-            float score = one_vafpp(clone_tree, vertex_map, F, root);
+            float score = one_fastbe(clone_tree, vertex_map, F, root);
             subtree_prune_and_regraft(clone_tree, u, parent, root);
             total_violation += update_sum_violation_matrix(clone_tree, vertex_map, F, A, {clone_tree[v].data.id, clone_tree[parent].data.id});
 
@@ -511,9 +511,9 @@ void perform_regression(argparse::ArgumentParser regress) {
     }
 
     auto start = std::chrono::high_resolution_clock::now();
-    double obj = one_vafpp(clone_tree, vertex_map, frequency_matrix, columns, 0);
+    double obj = one_fastbe(clone_tree, vertex_map, frequency_matrix, columns, 0);
     for (size_t i = 0; i < regress.get<size_t>("num_reps") - 1; ++i) {
-        one_vafpp(clone_tree, vertex_map, frequency_matrix, columns, 0);
+        one_fastbe(clone_tree, vertex_map, frequency_matrix, columns, 0);
     }
 
     auto end = std::chrono::high_resolution_clock::now();
@@ -610,13 +610,13 @@ void perform_search(argparse::ArgumentParser search) {
                 }
 
                 deterministic_hill_climb(clone_tree_stepwise, vertex_map, frequency_matrix, assigned_root, ncols);
-                float obj_stepwise = one_vafpp(clone_tree_stepwise, vertex_map, frequency_matrix, assigned_root);
+                float obj_stepwise = one_fastbe(clone_tree_stepwise, vertex_map, frequency_matrix, assigned_root);
 
                 /* Create a random tree by picking a random spanning tree of G. */
                 auto [clone_tree_int, root] = sample_random_spanning_tree(ancestry_graph, G_weights, gen, assigned_root);
                 digraph<clone_tree_vertex> clone_tree = convert_clone_tree(clone_tree_int, nrows);
                 deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root, ncols);
-                float obj = one_vafpp(clone_tree, identity_map, frequency_matrix, root);
+                float obj = one_fastbe(clone_tree, identity_map, frequency_matrix, root);
 
                 spdlog::info("Stepwise objective: {}, Random objective: {}", obj_stepwise, obj);
 
@@ -653,14 +653,14 @@ void perform_search(argparse::ArgumentParser search) {
 
 int main(int argc, char *argv[])
 {
-    auto console_logger = spdlog::stdout_color_mt("vafpp");
+    auto console_logger = spdlog::stdout_color_mt("fastbe");
     spdlog::set_default_logger(console_logger);
 
     auto error_logger = spdlog::stderr_color_mt("error");
 
     argparse::ArgumentParser program(
-        "vafpp",
-        std::to_string(VAFPP_VERSION_MAJOR) + "." + std::to_string(VAFPP_VERSION_MINOR)
+        "fastbe",
+        std::to_string(FASTBE_VERSION_MAJOR) + "." + std::to_string(FASTBE_VERSION_MINOR)
     );
 
     argparse::ArgumentParser regress(

@@ -11,13 +11,13 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wno-unused-parameter")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -pg --coverage")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
-project(vafpp VERSION 1.0)
+project(fastbe VERSION 1.0)
 
 add_subdirectory(src/)
 add_subdirectory(tests/)
 
-target_include_directories(vafpp PUBLIC "${vafpp_SOURCE_DIR}/include")
-target_include_directories(vafpp PUBLIC "${vafpp_SOURCE_DIR}/third-party/csv-parser/include")
+target_include_directories(fastbe PUBLIC "${fastbe_SOURCE_DIR}/include")
+target_include_directories(fastbe PUBLIC "${fastbe_SOURCE_DIR}/third-party/csv-parser/include")
 
 # turn off JSON library tests
 set(JSON_BuildTests OFF CACHE INTERNAL "")
@@ -31,7 +31,7 @@ add_subdirectory(third-party/json)
 add_subdirectory(third-party/gtest)
 
 # add include directories for all tests
-target_include_directories(piecewiselinear_test PUBLIC "${vafpp_SOURCE_DIR}/include")
-target_include_directories(piecewiselinear_test PUBLIC "${vafpp_SOURCE_DIR}/third-party/csv-parser/include")
+target_include_directories(piecewiselinear_test PUBLIC "${fastbe_SOURCE_DIR}/include")
+target_include_directories(piecewiselinear_test PUBLIC "${fastbe_SOURCE_DIR}/third-party/csv-parser/include")
 
 enable_testing()
