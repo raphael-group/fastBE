@@ -1,8 +1,10 @@
 #ifndef _DIGRAPH_H
 #define _DIGRAPH_H
 
+#include <algorithm>
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 #include <random>
 #include <utility>
 #include <vector>
@@ -32,8 +34,8 @@ class digraph {
 private:
     int id_counter = 0;
 
-    std::unordered_map<int, std::set<int>> succ;
-    std::unordered_map<int, std::set<int>> pred;
+    std::unordered_map<int, std::vector<int>> succ;
+    std::unordered_map<int, std::vector<int>> pred;
 
     std::unordered_map<int, vertex<T>> vertices;
 public:
@@ -41,20 +43,32 @@ public:
     int add_vertex(T data) {
         vertex<T> v(id_counter, data);
         vertices[v.id] = v;
-        succ[v.id] = std::set<int>();
-        pred[v.id] = std::set<int>();
+        succ[v.id] = std::vector<int>();
+        pred[v.id] = std::vector<int>();
         id_counter++;
         return v.id;
     }
 
     void add_edge(int u, int v) {
-        succ[u].insert(v);
-        pred[v].insert(u);
+        // succ[u].insert(v);
+        // pred[v].insert(u);
+        succ[u].push_back(v);
+        pred[v].push_back(u);
     }
 
     void remove_edge(int u, int v) {
-        succ[u].erase(v);
-        pred[v].erase(u);
+        // succ[u].erase(v);
+        // pred[v].erase(u);
+
+        auto it = std::find(succ[u].begin(), succ[u].end(), v);
+        if (it != succ[u].end()) {
+            succ[u].erase(it);
+        }
+
+        it = std::find(pred[v].begin(), pred[v].end(), u);
+        if (it != pred[v].end()) {
+            pred[v].erase(it);
+        }
     }
 
     std::vector<int> nodes() const {
@@ -101,11 +115,11 @@ public:
         return vertices.at(u);
     }
 
-    const std::set<int>& predecessors(int u) const {
+    const std::vector<int>& predecessors(int u) const {
         return pred.at(u);
     }
 
-    const std::set<int>& successors(int u) const {
+    const std::vector<int>& successors(int u) const {
         return succ.at(u);
     }
 
@@ -206,7 +220,7 @@ int rand_int(std::ranlux48_base& gen, int a, int b) {
  * the weight of the edge from the predecessor to v.
  */
 int rand_predecessor(
-        int v, const std::set<int>& predecessors, 
+        int v, const std::vector<int>& predecessors, 
         const std::map<std::pair<int,int>, double> &weights, std::ranlux48_base& gen
 ) {
     std::vector<int> preds(predecessors.begin(), predecessors.end());
@@ -256,7 +270,7 @@ std::pair<digraph<T>, int> sample_random_spanning_tree(
                 throw std::runtime_error("Graph is not strongly connected");
             }
 
-            next[v] = *std::next(pred.begin(), rand_predecessor(v, pred, weights, gen));
+            next[v] = rand_predecessor(v, pred, weights, gen);
             v = next[v];
         }
 

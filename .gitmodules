@@ -16,3 +16,6 @@
 [submodule "third-party/gtest"]
 	path = third-party/gtest
 	url = https://github.com/google/googletest
+[submodule "third-party/nanobench"]
+	path = third-party/nanobench
+	url = https://github.com/martinus/nanobench

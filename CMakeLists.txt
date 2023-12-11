@@ -29,6 +29,7 @@ add_subdirectory(third-party/csv-parser)
 add_subdirectory(third-party/argparse)
 add_subdirectory(third-party/json)
 add_subdirectory(third-party/gtest)
+add_subdirectory(third-party/nanobench)
 
 # add include directories for all tests
 target_include_directories(piecewiselinear_test PUBLIC "${fastbe_SOURCE_DIR}/include")
