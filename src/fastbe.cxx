@@ -103,12 +103,12 @@ void subtree_prune_and_regraft(digraph<clone_tree_vertex>& tree, int u, int v, i
 /*
  * Given a frequency matrix $F$ and a clone tree $T$, this function
  * finds the minimizing value of $$\sum_{i=1}^m\lVert F_i - (UB)_i \rVert_1$$ 
- * over all usage matrices in $\mathcal{O}(mn^2)$ using dynamic programming 
- * and an analysis of convex and continuous, piecewise linear functions. 
+ * over all usage matrices in $\mathcal{O}(mnd)$ using dynamic programming.
  *
- * Importantly, this function avoids recomputation, by only updating the 
- * piecewise linear functions of the clone tree at vertices whose subtrees have 
- * been modified.
+ * This function avoids recomputation, by only updating the 
+ * piecewise linear functions of the clone tree at vertices 
+ * whose subtrees have been modified, as specified by the 
+ * `valid` flag in the `clone_tree_vertex` struct.
  *
  * Input: 
  *  - clone_tree: A clone tree represented as a digraph.
@@ -195,8 +195,7 @@ double one_fastbe(
 /*
  * Given a frequency matrix $F$ and a clone tree $T$, this function
  * finds the minimizing value of $$\sum_{i=1}^m\lVert F_i - (UB)_i \rVert_1$$ 
- * over all usage matrices in $\mathcal{O}(mn^2)$ using dynamic programming 
- * and an analysis of convex and continuous, piecewise linear functions.
+ * over all usage matrices in $\mathcal{O}(mn^2)$ using dynamic programming.
  *
  * Input: 
  *  - clone_tree: A clone tree represented as a digraph.
@@ -256,45 +255,6 @@ double one_fastbe(
     }
 
     return -1 * obj;
-}
-
-digraph<int> stepwise_addition(
-    const std::vector<std::vector<double>>& F,
-    const std::vector<int> permutation
-) {
-    digraph<int> clone_tree;
-    std::unordered_map<int, int> vertex_map;
-    std::vector<int> columns;
-    for (auto v : permutation) {
-        columns.push_back(v);
-        if (!clone_tree.nodes().size()) {
-            int id = clone_tree.add_vertex(v);
-            vertex_map[v] = id;
-            continue;
-        }
-
-        double min_obj = std::numeric_limits<double>::infinity();
-        int min_u = -1;
-        for (auto u : clone_tree.nodes()) {
-            digraph<int> clone_tree_copy = clone_tree;
-            int id = clone_tree_copy.add_vertex(v);
-            clone_tree_copy.add_edge(u, id);
-            vertex_map[v] = id;
-            double obj = one_fastbe(clone_tree_copy, vertex_map, F, columns, permutation[0]);
-            if (obj < min_obj) {
-                min_obj = obj;
-                min_u = u;
-            }
-
-            vertex_map.erase(v);
-        }
-
-        int id = clone_tree.add_vertex(v);
-        clone_tree.add_edge(min_u, id);
-        vertex_map[v] = id;
-    }
-
-    return clone_tree;
 }
 
 /*
@@ -370,7 +330,7 @@ double update_sum_violation_matrix(
  */
 void deterministic_hill_climb(
     digraph<clone_tree_vertex>& clone_tree, const std::unordered_map<int, int>& vertex_map, 
-    const std::vector<std::vector<double>>& F, int root, int max_iterations
+    const std::vector<std::vector<double>>& F, int root, int max_iterations, size_t sample_id, int progress_interval = 10
 ) {
     if (max_iterations == -1) {
         max_iterations = std::numeric_limits<int>::max();
@@ -417,10 +377,17 @@ void deterministic_hill_climb(
         }
 
         float best_score = one_fastbe(clone_tree, vertex_map, F, root);
+
+        if (count % progress_interval == 0) {
+            spdlog::info("Sample ID {}: iteration {}, objective value: {}, total violation: {}", sample_id, count, best_score, total_violation);
+        }
+
         std::pair<int, int> best_move = {-1, -1};
         int iterations = 0;
         for (auto [tv, u, v] : move_priority_queue) {
-            if (tv > best_score || iterations >= max_iterations) break;
+            if (tv > best_score || iterations >= max_iterations) {
+                break;
+            }
 
             iterations++;
         
@@ -439,7 +406,7 @@ void deterministic_hill_climb(
         }
 
         if (best_move.first == -1) {
-            spdlog::info("No SPR moves can improve the score -- local minimum found.");
+            spdlog::info("Sample ID {} found local minimum -- no SPR moves can improve the score.", sample_id);
             break;
         }
 
@@ -451,7 +418,7 @@ void deterministic_hill_climb(
         count++;
     }
 
-    spdlog::info("Hill climbing iterations: {}", count);
+    spdlog::info("Sample ID {} hill climbing completed @ {} iterations", count, sample_id);
 }
 
 /* 
@@ -589,36 +556,21 @@ void perform_search(argparse::ArgumentParser search) {
     std::pair<digraph<clone_tree_vertex>, float> best_tree = std::make_pair(digraph<clone_tree_vertex>(), std::numeric_limits<float>::max());
     for (auto& th : threads) {
         th = std::thread([&]() {
+            size_t thread_id = std::hash<std::thread::id>{}(std::this_thread::get_id());
+            (void) thread_id; // suppress unused variable warning
             while (true) {
                 std::random_device rd;
                 std::ranlux48_base gen(rd());
                 size_t i = counter++;
                 if (i >= num_samples) return;  // no more work to do
 
-                /* Create a random tree using stepwise addition. */
-                std::vector<int> permutation(ncols);
-                std::iota(permutation.begin(), permutation.end(), 0);
-                std::shuffle(permutation.begin(), permutation.end(), gen);
-                auto it = std::find(permutation.begin(), permutation.end(), assigned_root);
-                std::iter_swap(permutation.begin(), it);
-
-                auto clone_tree_int_stepwise = stepwise_addition(frequency_matrix, permutation);
-                digraph<clone_tree_vertex> clone_tree_stepwise = convert_clone_tree(clone_tree_int_stepwise, nrows);
-                std::unordered_map<int, int> vertex_map;
-                for (auto v : clone_tree_stepwise.nodes()) {
-                    vertex_map[clone_tree_stepwise[v].data.id] = v;
-                }
-
-                deterministic_hill_climb(clone_tree_stepwise, vertex_map, frequency_matrix, assigned_root, ncols);
-                float obj_stepwise = one_fastbe(clone_tree_stepwise, vertex_map, frequency_matrix, assigned_root);
-
                 /* Create a random tree by picking a random spanning tree of G. */
                 auto [clone_tree_int, root] = sample_random_spanning_tree(ancestry_graph, G_weights, gen, assigned_root);
                 digraph<clone_tree_vertex> clone_tree = convert_clone_tree(clone_tree_int, nrows);
-                deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root, ncols);
+                deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root, ncols, i, search.get<int>("progress_interval"));
                 float obj = one_fastbe(clone_tree, identity_map, frequency_matrix, root);
 
-                spdlog::info("Stepwise objective: {}, Random objective: {}", obj_stepwise, obj);
+                spdlog::info("Random hill climbed tree objective: {}", obj);
 
                 {
                     std::lock_guard<std::mutex> lock(mtx);  // lock the mutex to protect shared resources
@@ -671,8 +623,8 @@ int main(int argc, char *argv[])
         "search"
     );
 
-    regress.add_description("Regresses a clone tree onto a frequency matrix.");
-    search.add_description("Searches for a clone tree that best fits a frequency matrix.");
+    regress.add_description("regresses a clone tree onto a frequency matrix.");
+    search.add_description("searches for a clone tree that best fits a frequency matrix.");
 
     regress.add_argument("clone_tree")
            .help("adjacency list of the clone tree");
@@ -719,6 +671,11 @@ int main(int argc, char *argv[])
     search.add_argument("-f", "--assigned_root")
           .help("assigned root")
           .default_value(0)
+          .scan<'u', unsigned int>();
+
+    search.add_argument("-p", "--progress_interval")
+          .help("progress interval")
+          .default_value(50)
           .scan<'u', unsigned int>();
 
     program.add_subparser(search);
