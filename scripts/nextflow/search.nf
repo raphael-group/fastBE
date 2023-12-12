@@ -1,8 +1,8 @@
-params.proj_dir      = "/n/fs/ragr-research/projects/vafpp"
-params.outputDir     = "/n/fs/ragr-research/projects/vafpp/nextflow_results/"
+params.proj_dir      = "/n/fs/ragr-research/projects/fastBE"
+params.outputDir     = "/n/fs/ragr-research/projects/fastBE/nextflow_results/"
 params.sim_script    = "${params.proj_dir}/scripts/simulation.py"
 
-params.allele_minima = "${params.proj_dir}/build/src/vafpp"
+params.allele_minima = "${params.proj_dir}/build/src/fastBE"
 
 params.pairtree_input_script = "${params.proj_dir}/scripts/make_pairtree_input.py"
 params.pairtree_parse_output = "${params.proj_dir}/scripts/parse_pairtree_output.py"
@@ -142,7 +142,7 @@ process calder {
         tuple file("tree.txt"), val(id)
 
     """
-    export LD_LIBRARY_PATH=/n/fs/ragr-research/projects/vafpp/dependencies/calder/glpk-4.65/lib/jni 
+    export LD_LIBRARY_PATH=/n/fs/ragr-research/projects/fastBE/dependencies/calder/glpk-4.65/lib/jni 
     java -jar '${params.calder_jar}' -i ${input_tsv} -o . -v glpk -N
     python '${params.calder_parse_output}' calder_tree1.dot > tree.txt
     """

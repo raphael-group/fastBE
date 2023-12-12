@@ -1,6 +1,6 @@
 nextflow.enable.dsl=2
 
-params.root_dir = '/n/fs/ragr-research/projects/vafpp/'
+params.root_dir = '/n/fs/ragr-research/projects/fastBE/'
 params.ground_truth_dir = 'nextflow_results/ground_truth/'
 params.algorithms = [
     ['pairtree', 'nextflow_results/pairtree/', '_best_tree.txt'],
