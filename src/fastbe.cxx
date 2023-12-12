@@ -206,6 +206,83 @@ float one_fastbe(
     return -1 * obj;
 }
 
+float one_fastbe_inplace(
+    digraph<clone_tree_vertex>& clone_tree, 
+    const std::unordered_map<int, int>& vertex_map, 
+    const std::vector<std::vector<float>>& F, 
+    int root
+) {
+    size_t nrows = F.size();
+
+    std::stack<int> call_stack;
+    call_stack.push(root);
+    while(!call_stack.empty()) {
+        int i = call_stack.top();
+        call_stack.pop();
+
+        if (clone_tree[vertex_map.at(i)].data.valid) continue;
+
+        std::vector<float>& w_ref = clone_tree[vertex_map.at(i)].data.w;
+
+        /* if not valid, first set w vector. */
+        for (size_t j = 0; j < nrows; ++j) {
+            w_ref[j] = F[j][i];
+            for (auto k : clone_tree.successors(vertex_map.at(i))) {
+                w_ref[j] -= F[j][clone_tree[k].data.id];
+            }
+        }
+
+        /* If leaf, set piecewise linear function and return. */
+        if (clone_tree.out_degree(vertex_map.at(i)) == 0) {
+            for (size_t j = 0; j < nrows; ++j) {
+                clone_tree[vertex_map.at(i)].data.fs[j] = PiecewiseLinearF({w_ref[j]}, 0);
+            }
+
+            clone_tree[vertex_map.at(i)].data.valid = true;
+            continue;
+        }
+
+        /* Recurse at children. */
+        bool all_children_valid = true; 
+        for (auto k : clone_tree.successors(vertex_map.at(i))) {
+            if (!clone_tree[k].data.valid) {
+                if (all_children_valid) {
+                    call_stack.push(i);
+                }
+
+                call_stack.push(clone_tree[k].data.id);
+                all_children_valid = false;
+            }
+        }
+
+        if (!all_children_valid) continue;
+
+        for (size_t j = 0; j < nrows; ++j) {
+            PiecewiseLinearF g_out({w_ref[j]}, 0);
+            for (auto k : clone_tree.successors(vertex_map.at(i))) {
+                PiecewiseLinearF f = clone_tree[k].data.fs[j];
+                f.compute_minimizer();
+                g_out.addInPlace(std::move(f));
+            }
+
+            clone_tree[vertex_map.at(i)].data.fs[j] = g_out;
+        }
+
+        clone_tree[vertex_map.at(i)].data.valid = true;
+    }
+
+    float obj = 0;
+    for (size_t j = 0; j < nrows; ++j) {
+        PiecewiseLinearF f = clone_tree[root].data.fs[j];
+        f.compute_minimizer();
+        f.addInPlace(PiecewiseLinearF({1 - F[j][root]}, 0));
+        obj += f.minimizer();
+    }
+
+    return -1 * obj;
+}
+
+
 /*
  * Given a frequency matrix $F$ and a clone tree $T$, this function
  * finds the minimizing value of $$\sum_{i=1}^m\lVert F_i - (UB)_i \rVert_1$$ 
@@ -299,141 +376,6 @@ std::vector<std::vector<float>> compute_sum_violation_matrix(
     }
 
     return A;
-}
-
-/* 
- * Performs hill climbing search to find the clone tree $T$ minimizing
- * the total violation of the sum condition with respect to the frequency
- * matrix $F$ by using subtree prune and regraft operations. 
- *
- * Stops when no SPR operation reduces the error.
- *
- * Input:
- * - clone_tree: A clone tree represented as a digraph.
- * - vertex_map: A map from the columns of the frequency matrix to the
- *   vertices of the clone tree.
- * - F: A frequency matrix represented as a 2D vector.
- * - root: The root of the clone tree.
- */
-void deterministic_total_violation_hill_climb(
-    digraph<clone_tree_vertex>& clone_tree, const std::unordered_map<int, int>& vertex_map, 
-    const std::vector<std::vector<float>>& F, int root, int max_iterations, size_t sample_id, 
-    int progress_interval = 10
-) {
-    if (max_iterations == -1) {
-        max_iterations = std::numeric_limits<int>::max();
-    }
-
-    std::vector<std::vector<float>> F_transpose(F[0].size(), std::vector<float>(F.size(), 0.0));
-    for (size_t i = 0; i < F.size(); ++i) {
-        for (size_t j = 0; j < F[0].size(); ++j) {
-            F_transpose[j][i] = F[i][j];
-        }
-    }
-
-    auto A = compute_sum_violation_matrix(clone_tree, vertex_map, F_transpose);
-    float total_violation = 0;
-    for (size_t i = 0; i < A.size(); ++i) {
-        for (size_t j = 0; j < A[0].size(); ++j) {
-            total_violation += std::max(A[i][j] - F_transpose[i][j], 0.0f);
-        }
-    }
-
-    /* 
-     * Invariant(s): 
-     *    - total_violation: at the beginning and end of every iteration is equal to the
-     *    total violation of the sum condition.
-     */
-    int count = 0;
-    while (true) {
-        if (count % progress_interval == 0) {
-            spdlog::info("Sample ID {}: iteration {}, total violation: {}", sample_id, count, total_violation);
-        }
-
-        /*
-         * run DFS to compute a pre-order traversal of the tree
-         * to enable constant time ancestor queries
-         */
-        std::stack<int> call_stack;
-        call_stack.push(root);
-        std::vector<int> order(clone_tree.nodes().size());
-        int order_index = 0;
-        while(!call_stack.empty()) {
-            int i = call_stack.top();
-            call_stack.pop();
-
-            order[i] = order_index;
-            order_index++;
-
-            for (auto k : clone_tree.successors(i)) {
-                call_stack.push(k);
-            }
-        }
-
-        /* 
-         * Go over all possible moves, greedily choosing the move that maximally 
-         * reduces the total violation score. Maintains the invariant that
-         * `total_violation` is equal to the total violation of the sum condition
-         * for the current tree, even after the move is made.
-         */
-        float best_total_violation = total_violation;
-        std::pair<int, int> best_move = {-1, -1};
-        for (auto u : clone_tree.nodes()) {
-            for (auto v : clone_tree.nodes()) {
-                // u is an ancestor of v if and only if order[u] <= order[v]
-                if (u == v || u == root || order[u] <= order[v]) {
-                    continue; 
-                }
-
-                int p = *clone_tree.predecessors(u).begin();
-                int p_column = clone_tree[p].data.id;
-                int u_column = clone_tree[u].data.id;
-                int v_column = clone_tree[v].data.id;
-
-                float diff = 0;
-                for (size_t j = 0; j < A[0].size(); ++j) {
-                    // simulating the SPR move by putting u as a child of v
-                    // i.e. A[j][p] <- A[j][p] - F[j][u]
-                    float A_jp = A[p_column][j] - F_transpose[u_column][j];
-                    diff += std::max(A_jp - F_transpose[p_column][j], 0.0f) - std::max(A[p_column][j] - F_transpose[p_column][j], 0.0f);
-                }
-
-                for (size_t j = 0; j < A[0].size(); ++j) {
-                    // simulating the SPR move by putting u as a child of v
-                    // i.e. A[j][v] <- A[j][v] + F[j][u]
-                    float A_jv = A[v_column][j] + F_transpose[u_column][j];
-                    diff += std::max(A_jv - F_transpose[v_column][j], 0.0f) - std::max(A[v_column][j] - F_transpose[v_column][j], 0.0f);
-                }
-
-                if (diff + total_violation < best_total_violation) {
-                    best_total_violation = diff + total_violation;
-                    best_move = {u, v};
-                }
-            }
-        }
-
-        if (best_move.first == -1) {
-            spdlog::info("Sample ID {} found local minimum -- no SPR moves can improve the score.", sample_id);
-            break;
-        }
-
-        auto [u, v] = best_move;
-        subtree_prune_and_regraft(clone_tree, u, v, root);
-
-        // update the total violation matrix, asymptotically acceptable
-        // since we already spend O(n^2m) time going over all possible moves 
-        A = compute_sum_violation_matrix(clone_tree, vertex_map, F_transpose);
-        total_violation = 0;
-        for (size_t i = 0; i < A.size(); ++i) {
-            for (size_t j = 0; j < A[0].size(); ++j) {
-                total_violation += std::max(A[i][j] - F_transpose[i][j], 0.0f);
-            }
-        }
-
-        count++;
-    }
-
-    spdlog::info("Sample ID {} hill climbing completed @ {} iterations", sample_id, count);
 }
 
 /* 
@@ -557,7 +499,7 @@ void deterministic_hill_climb(
             float score = one_fastbe(clone_tree, vertex_map, F, root);
             subtree_prune_and_regraft(clone_tree, u, parent, root);
 
-            if (score < best_score) {
+            if (score < best_score - 1e-5) {
                 best_score = score;
                 best_move = {u, v};
             } 
@@ -709,17 +651,16 @@ void perform_search(argparse::ArgumentParser search) {
     }
 
     if (search.get<bool>("benchmark")) {
-        spdlog::info("Benchmarking one sample and greedy hill climbing...");
-        spdlog::info("Number of samples (m={}), number of clones (n={}), and number of iterations (i=10)", nrows, ncols);
+        spdlog::info("Benchmarking computing the l1 minimizer 100 times...");
+        spdlog::info("Number of samples (m={}) and  number of clones (n={})", nrows, ncols);
 
 
         std::random_device rd;
         std::ranlux48_base gen(rd());
 
-        ankerl::nanobench::Bench().epochs(100).run("greedy_hill_climbing", [&] {
+        ankerl::nanobench::Bench().epochs(100).run("", [&] {
             auto [clone_tree_int, root] = sample_random_spanning_tree(ancestry_graph, G_weights, gen, assigned_root);
             digraph<clone_tree_vertex> clone_tree = convert_clone_tree(clone_tree_int, nrows);
-            //deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root, 10, 0, 1);
             float obj = one_fastbe(clone_tree, identity_map, frequency_matrix, root);
         });
 
@@ -750,10 +691,7 @@ void perform_search(argparse::ArgumentParser search) {
                 auto [clone_tree_int, root] = sample_random_spanning_tree(ancestry_graph, G_weights, gen, assigned_root);
                 digraph<clone_tree_vertex> clone_tree = convert_clone_tree(clone_tree_int, nrows);
 
-                spdlog::info("Sample ID {}: performing total violation hill climb (phase I)...", i);
-                deterministic_total_violation_hill_climb(clone_tree, identity_map, frequency_matrix, root, ncols, i, search.get<int>("progress_interval"));
-
-                spdlog::info("Sample ID {}: performing hill climb (phase II)...", i);
+                spdlog::info("Sample ID {}: performing hill climb...", i);
                 deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root, ncols, i, search.get<int>("progress_interval"));
                 float obj = one_fastbe(clone_tree, identity_map, frequency_matrix, root);
 
