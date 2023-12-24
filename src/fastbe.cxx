@@ -396,7 +396,7 @@ void deterministic_total_violation_hill_climb(
                     diff += std::max(A_jv - F_transpose[v_column][j], 0.0f) - std::max(A[v_column][j] - F_transpose[v_column][j], 0.0f);
                 }
 
-                if (diff + total_violation < best_total_violation) {
+                if (diff + total_violation < best_total_violation - 1e-4) {
                     best_total_violation = diff + total_violation;
                     best_move = {u, v};
                 }
@@ -549,7 +549,7 @@ void deterministic_hill_climb(
             float score = one_fastbe(clone_tree, vertex_map, F, root);
             subtree_prune_and_regraft(clone_tree, u, parent, root);
 
-            if (score < best_score - 1e-6) {
+            if (score < best_score - 1e-4) {
                 best_score = score;
                 best_move = {u, v};
             } 
