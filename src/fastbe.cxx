@@ -427,6 +427,79 @@ void deterministic_total_violation_hill_climb(
     spdlog::info("Sample ID {} hill climbing completed @ {} iterations", sample_id, count);
 }
 
+void simulated_annealing(
+    digraph<clone_tree_vertex>& clone_tree, const std::unordered_map<int, int>& vertex_map, 
+    const std::vector<std::vector<float>>& F, int root, float temp_decay, int max_iterations,
+    json& info, size_t sample_id, 
+    int progress_interval = 10, std::mt19937 rng = std::mt19937(std::random_device{}())
+) {
+    std::uniform_int_distribution<int> vertex_distribution(0, clone_tree.nodes().size() - 1);
+
+    int count = 0, accepted = 0, rejected = 0;
+    float current_score = one_fastbe(clone_tree, vertex_map, F, root);
+
+    digraph<clone_tree_vertex> best_clone_tree = clone_tree;
+    float best_score = current_score;
+    int made_improvement = 0;
+    while (made_improvement < max_iterations) {
+        json iteration_info;
+        iteration_info["iteration"] = count;
+        iteration_info["accepted"] = accepted;
+        iteration_info["rejected"] = rejected;
+        iteration_info["objective_value"] = current_score;
+        iteration_info["best_objective_value"] = best_score;
+        info.push_back(iteration_info);
+
+        if (current_score < best_score - 1e-4) {
+            best_score = current_score;
+            best_clone_tree = clone_tree;
+            made_improvement = 0;
+        }
+
+        if (count % progress_interval == 0) {
+            spdlog::info(
+                "Sample ID {}: iteration {}, accepted {}, rejected {}, objective value: {}, best objective value: {}", 
+                sample_id, count, accepted, rejected, current_score, best_score
+            );
+        }
+
+        int u = vertex_distribution(rng);
+        while (u == root) {
+            u = vertex_distribution(rng);
+        }
+
+        int v = vertex_distribution(rng);
+        while (u == v || ancestor(clone_tree, u, v)) {
+            v = vertex_distribution(rng);
+        }
+
+        int parent = *clone_tree.predecessors(u).begin();
+        subtree_prune_and_regraft(clone_tree, u, v, root);
+
+        float score = one_fastbe(clone_tree, vertex_map, F, root);
+
+        float temperature = temp_decay / std::log(count + 2);
+        float prob = std::exp((current_score - score) / (score * temperature));
+        float rand = std::generate_canonical<float, 10>(rng);
+
+        if (rand <= prob) {
+            // spdlog::info("Sample ID {}: accepted move with probability {}", sample_id, prob);
+            current_score = score;
+            accepted++;
+        } else {
+            // spdlog::info("Sample ID {}: rejected move with probability {}", sample_id, prob);
+            subtree_prune_and_regraft(clone_tree, u, parent, root);
+            rejected++;
+        }
+
+        count++;
+        made_improvement++;
+    }
+
+    spdlog::info("Sample ID {} simulated annealing completed @ {} iterations", sample_id, count);
+}
+
+
 /* 
  * Performs hill climbing search to find clone tree $T$ and usage 
  * matrix $U$ minimizing  the reconstruction error $||F - UB_{T}||_1$ 
@@ -624,7 +697,7 @@ std::vector<std::vector<float>> parse_frequency_matrix(const std::string& filena
     return matrix;
 }
 
-void perform_regression(argparse::ArgumentParser regress) {
+void perform_regression(const argparse::ArgumentParser &regress) {
     auto [clone_tree, vertex_map] = parse_adjacency_list(regress.get<std::string>("clone_tree"));
     std::vector<std::vector<float>> frequency_matrix = parse_frequency_matrix(regress.get<std::string>("frequency_matrix"));
 
@@ -654,7 +727,7 @@ void perform_regression(argparse::ArgumentParser regress) {
     return;
 }
 
-void perform_search(argparse::ArgumentParser search) {
+void perform_search(const argparse::ArgumentParser &search) {
     std::vector<std::vector<float>> frequency_matrix = parse_frequency_matrix(search.get<std::string>("frequency_matrix"));
 
     size_t nrows = frequency_matrix.size();
@@ -700,29 +773,6 @@ void perform_search(argparse::ArgumentParser search) {
         identity_map[i] = i;
     }
 
-    if (search.get<bool>("benchmark")) {
-        spdlog::info("Benchmarking computing the l1 minimizer 100 times...");
-        spdlog::info("Number of samples (m={}) and  number of clones (n={})", nrows, ncols);
-
-
-        // use fixed seed for benchmarking
-        // std::random_device rd;
-        // std::ranlux48_base gen(rd());
-        std::ranlux48_base gen(0);
-
-        auto [clone_tree_int, root] = sample_random_spanning_tree(ancestry_graph, G_weights, gen, assigned_root);
-        digraph<clone_tree_vertex> clone_tree = convert_clone_tree(clone_tree_int, nrows);
-        auto start = std::chrono::high_resolution_clock::now();
-        float obj1 = one_fastbe(clone_tree, identity_map, frequency_matrix, root);
-        auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-        std::cout << "Time to compute l1 minimizer: " << duration.count() << " ns" << std::endl;
-
-        spdlog::info("Objective value (one_fastbe): {}", obj1);
-
-        return;
-    }
-
     /* Draw N random spanning trees from the complete graph and then
      * perform hill climbing on each of them. */
     std::mutex mtx;
@@ -747,7 +797,18 @@ void perform_search(argparse::ArgumentParser search) {
                 auto [clone_tree_int, root] = sample_random_spanning_tree(ancestry_graph, G_weights, gen, assigned_root);
                 digraph<clone_tree_vertex> clone_tree = convert_clone_tree(clone_tree_int, nrows);
 
-                if (search.get<bool>("two-phase")) {
+                if (search.get<std::string>("algorithm") == "simulated_annealing") {
+                    spdlog::info("Sample ID {}: performing simulated annealing...", i);
+                    json simulated_annealing_info;
+                    simulated_annealing(
+                        clone_tree, identity_map, frequency_matrix, 
+                        root, search.get<float>("temp_decay"), search.get<int>("max_iterations"),
+                        simulated_annealing_info, i, search.get<int>("progress_interval")
+                    );
+
+                    std::ofstream json_output(search.get<std::string>("output") + "_sample_" + std::to_string(i) + "_sim_annealing_info.json");
+                    json_output << json(simulated_annealing_info).dump(4) << std::endl;
+                } else if (search.get<std::string>("algorithm") == "two_phase_hill_climb") {
                     spdlog::info("Sample ID {}: performing total violation hill climb (phase I)...", i);
                     deterministic_total_violation_hill_climb(clone_tree, identity_map, frequency_matrix, root, ncols, i, search.get<int>("progress_interval"));
 
@@ -873,10 +934,20 @@ int main(int argc, char *argv[])
           .default_value(false)
           .implicit_value(true);
 
-    search.add_argument("--two-phase")
-          .help("two phase mode")
-          .default_value(false)
-          .implicit_value(true);
+    search.add_argument("--algorithm")
+            .help("algorithm to use")
+            .default_value(std::string{"hill_climb"})
+            .choices("hill_climb", "simulated_annealing", "two_phase_hill_climb");
+
+    search.add_argument("--temp_decay")
+            .help("temperature decay")
+            .default_value(1.0f)
+            .scan<'g', float>();
+
+    search.add_argument("--max_iterations")
+            .help("maximum number of iterations")
+            .default_value(10000)
+            .scan<'d', int>();
 
     program.add_subparser(search);
     program.add_subparser(regress);
