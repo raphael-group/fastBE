@@ -429,14 +429,40 @@ void deterministic_total_violation_hill_climb(
 
 void simulated_annealing(
     digraph<clone_tree_vertex>& clone_tree, const std::unordered_map<int, int>& vertex_map, 
-    const std::vector<std::vector<float>>& F, int root, float initial_temp, int max_iterations,
+    const std::vector<std::vector<float>>& F, int root, float initial_probability, int max_iterations,
     json& info, size_t sample_id, 
     int progress_interval = 10, std::mt19937 rng = std::mt19937(std::random_device{}())
 ) {
     std::uniform_int_distribution<int> vertex_distribution(0, clone_tree.nodes().size() - 1);
 
-    int count = 0, accepted = 0, rejected = 0;
     float current_score = one_fastbe(clone_tree, vertex_map, F, root);
+    float total_change = 0; 
+    int positive_changes = 0;
+    for (int iteration = 0; iteration < 1000; iteration++) {
+        int u = vertex_distribution(rng);
+        while (u == root) {
+            u = vertex_distribution(rng);
+        }
+
+        int v = vertex_distribution(rng);
+        while (u == v || ancestor(clone_tree, u, v)) {
+            v = vertex_distribution(rng);
+        }
+
+        int parent = *clone_tree.predecessors(u).begin();
+        subtree_prune_and_regraft(clone_tree, u, v, root);
+
+        float score = one_fastbe(clone_tree, vertex_map, F, root);
+        total_change += std::max(score - current_score, 0.0f);
+        positive_changes += score > current_score;
+
+        subtree_prune_and_regraft(clone_tree, u, parent, root);
+    }
+
+    float initial_temp = -1 * (total_change / positive_changes) / std::log(initial_probability);
+    spdlog::info("Sample ID {} initial temperature: {}", sample_id, initial_temp);
+
+    int count = 0, accepted = 0, rejected = 0;
 
     digraph<clone_tree_vertex> best_clone_tree = clone_tree;
     float best_score = current_score;
@@ -489,6 +515,7 @@ void simulated_annealing(
         }
     }
 
+    clone_tree = best_clone_tree;
     spdlog::info("Sample ID {} simulated annealing completed @ {} iterations", sample_id, count);
 }
 
@@ -795,9 +822,12 @@ void perform_search(const argparse::ArgumentParser &search) {
                     json simulated_annealing_info;
                     simulated_annealing(
                         clone_tree, identity_map, frequency_matrix, 
-                        root, search.get<float>("initial_temp"), search.get<int>("max_iterations"),
+                        root, search.get<float>("initial_probability"), search.get<int>("max_iterations"),
                         simulated_annealing_info, i, search.get<int>("progress_interval")
                     );
+
+                    spdlog::info("Sample ID {}: performing cleanup hill climb...", i);
+                    deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root, ncols, i, search.get<int>("progress_interval"));
 
                     std::ofstream json_output(search.get<std::string>("output") + "_sample_" + std::to_string(i) + "_sim_annealing_info.json");
                     json_output << json(simulated_annealing_info).dump(4) << std::endl;
@@ -929,11 +959,11 @@ int main(int argc, char *argv[])
 
     search.add_argument("--algorithm")
             .help("algorithm to use")
-            .default_value(std::string{"hill_climb"})
+            .default_value(std::string{"simulated_annealing"})
             .choices("hill_climb", "simulated_annealing", "two_phase_hill_climb");
 
-    search.add_argument("--initial-temp")
-            .help("initial temperature constant")
+    search.add_argument("--initial_probability")
+            .help("initial probability of accepting a move during simulated annealing")
             .default_value(0.5f)
             .scan<'g', float>();
 
