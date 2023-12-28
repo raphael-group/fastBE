@@ -34,7 +34,7 @@ def one_vafpp_linear_program(B, F):
         for j in range(n):
             U_np[i, j] = U[i, j].x
 
-    return U_np
+    return U_np, model.objVal
 
 """
 Constructs the clonal matrix from a clonal tree.
@@ -120,7 +120,7 @@ if __name__ == "__main__":
     F = U @ B
 
     B_hat = construct_clonal_matrix(inferred_tree, len(true_tree.nodes))
-    U_hat = one_vafpp_linear_program(B_hat, F)
+    U_hat, obj = one_vafpp_linear_program(B_hat, F)
 
     u_l1_error = np.sum(np.abs(U - U_hat))
     f_l1_error = np.sum(np.abs(F - U @ B_hat))
@@ -129,6 +129,8 @@ if __name__ == "__main__":
         'F_error': f_l1_error,
         'U_error': u_l1_error
     }
+
+    result['lp_objective'] = obj
 
     # Write the result to a JSON file 
     if args.output:

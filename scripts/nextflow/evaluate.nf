@@ -4,6 +4,7 @@ params.root_dir = '/n/fs/ragr-research/projects/fastBE/'
 params.ground_truth_dir = 'nextflow_results/ground_truth/'
 params.algorithms = [
     ['pairtree', 'nextflow_results/pairtree/', '_best_tree.txt'],
+    ['orchard', 'nextflow_results/orchard/', '_best_tree.txt'],
     ['allele_minima', 'nextflow_results/allele_minima/', '_inferred_tree.txt'],
     ['calder', 'nextflow_results/calder/', '_inferred_tree.txt'],
     ['citup', 'nextflow_results/citup/', '_inferred_tree.txt']
@@ -44,7 +45,7 @@ workflow {
         [algo, it[3], ground_truth_tree, ground_truth_U, inferred_tree]
     }
 
-    eval_channel | EvaluateTrees | map { result, algo, name ->
+    eval_channel | filter { file(it[4]).exists() } | EvaluateTrees | map { result, algo, name ->
         result.moveTo("nextflow_results/evaluation/${algo}_${name}.json")
     }
 }

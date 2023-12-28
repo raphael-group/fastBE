@@ -430,7 +430,7 @@ void deterministic_total_violation_hill_climb(
 void simulated_annealing(
     digraph<clone_tree_vertex>& clone_tree, const std::unordered_map<int, int>& vertex_map, 
     const std::vector<std::vector<float>>& F, int root, float initial_probability, int max_iterations,
-    json& info, size_t sample_id, 
+    json& info, bool log_info, size_t sample_id, 
     int progress_interval = 10, std::mt19937 rng = std::mt19937(std::random_device{}())
 ) {
     std::uniform_int_distribution<int> vertex_distribution(0, clone_tree.nodes().size() - 1);
@@ -467,13 +467,15 @@ void simulated_annealing(
     digraph<clone_tree_vertex> best_clone_tree = clone_tree;
     float best_score = current_score;
     for (; count < max_iterations; count++) {
-        json iteration_info;
-        iteration_info["iteration"] = count;
-        iteration_info["accepted"] = accepted;
-        iteration_info["rejected"] = rejected;
-        iteration_info["objective_value"] = current_score;
-        iteration_info["best_objective_value"] = best_score;
-        info.push_back(iteration_info);
+        if (log_info) {
+            json iteration_info;
+            iteration_info["iteration"] = count;
+            iteration_info["accepted"] = accepted;
+            iteration_info["rejected"] = rejected;
+            iteration_info["objective_value"] = current_score;
+            iteration_info["best_objective_value"] = best_score;
+            info.push_back(iteration_info);
+        }
 
         if (current_score < best_score - 1e-4) {
             best_score = current_score;
@@ -823,7 +825,7 @@ void perform_search(const argparse::ArgumentParser &search) {
                     simulated_annealing(
                         clone_tree, identity_map, frequency_matrix, 
                         root, search.get<float>("initial_probability"), search.get<int>("max_iterations"),
-                        simulated_annealing_info, i, search.get<int>("progress_interval")
+                        simulated_annealing_info, search.get<bool>("log"), i, search.get<int>("progress_interval")
                     );
 
                     spdlog::info("Sample ID {}: performing cleanup hill climb...", i);
@@ -831,7 +833,7 @@ void perform_search(const argparse::ArgumentParser &search) {
 
                     std::ofstream json_output(search.get<std::string>("output") + "_sample_" + std::to_string(i) + "_sim_annealing_info.json");
                     json_output << json(simulated_annealing_info).dump(4) << std::endl;
-                } else if (search.get<std::string>("algorithm") == "two_phase_hill_climb") {
+               } else if (search.get<std::string>("algorithm") == "two_phase_hill_climb") {
                     spdlog::info("Sample ID {}: performing total violation hill climb (phase I)...", i);
                     deterministic_total_violation_hill_climb(clone_tree, identity_map, frequency_matrix, root, ncols, i, search.get<int>("progress_interval"));
 
@@ -952,8 +954,8 @@ int main(int argc, char *argv[])
           .default_value(5)
           .scan<'d', int>();
 
-    search.add_argument("--benchmark")
-          .help("benchmark mode")
+    search.add_argument("--log")
+          .help("log all info")
           .default_value(false)
           .implicit_value(true);
 
@@ -964,8 +966,9 @@ int main(int argc, char *argv[])
 
     search.add_argument("--initial_probability")
             .help("initial probability of accepting a move during simulated annealing")
-            .default_value(0.5f)
+            .default_value(0.1f)
             .scan<'g', float>();
+
 
     search.add_argument("--max_iterations")
             .help("maximum number of simulated annealing iterations")
