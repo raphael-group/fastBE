@@ -153,9 +153,9 @@ template <class T>
 std::string to_adjacency_list(const digraph<T>& G, const std::unordered_map<int, int>& vertex_map) {
     std::stringstream ss;
     for (const auto& u : G.nodes()) {
-        ss << vertex_map.at(u) << " ";
+        ss << G[u].data.id << " ";
         for (const auto& v : G.successors(u)) {
-            ss << vertex_map.at(v) << " ";
+            ss << G[v].data.id << " ";
         }
         ss << std::endl;
     }

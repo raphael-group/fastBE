@@ -33,6 +33,7 @@ def load_files(directory):
                 false_negatives = content['pairwise_relations']['false_negatives']
                 U_error = content["frequency_matrix"]["U_error"]
                 F_error = content["frequency_matrix"]["F_error"]
+                lp_error = content["lp_objective"]
 
                 row = {
                     'algorithm': algorithm,
@@ -49,6 +50,7 @@ def load_files(directory):
                     'false_negatives': false_negatives,
                     'U_error': U_error,
                     'F_error': F_error,
+                    'lp_objective': lp_error,
                     'elapsed_time': elapsed_time
                 }
                 data.append(row)

@@ -77,30 +77,15 @@ digraph<clone_tree_vertex> convert_clone_tree(const digraph<int>& clone_tree, si
 }
 
 /*
- * Prunes the subtree rooted at vertex u and regrafts as a child of 
- * vertex v. This function assumes that u is not the root of the tree.
- */
-void subtree_prune_and_regraft(digraph<clone_tree_vertex>& tree, int u, int v, int root) {
+ * Invalidates all vertices on the path from u to root.
+ */ 
+void invalidate(digraph<clone_tree_vertex>& tree, int u, int root) {
+    tree[u].data.valid = false;
+
+    if (u == root) return;
+
     int parent = *tree.predecessors(u).begin();
-    tree.remove_edge(parent, u);
-    tree.add_edge(v, u);
-
-    std::stack<int> s;
-    s.push(u);
-    s.push(parent);
-
-    // walk from vertices u and v to root and update valid flags
-    while (!s.empty()) {
-        int node_id = s.top();
-        s.pop();
-
-        tree[node_id].data.valid = false;
-
-        if (node_id == root) continue;
-
-        int parent = *tree.predecessors(node_id).begin();
-        s.push(parent);
-    }
+    invalidate(tree, parent, root);
 }
 
 /*
@@ -291,387 +276,129 @@ std::vector<std::vector<float>> compute_sum_violation_matrix(
 }
 
 /* 
- * Performs hill climbing search to find the clone tree $T$ minimizing
- * the total violation of the sum condition with respect to the frequency
- * matrix $F$ by using subtree prune and regraft operations. 
- *
- * Stops when no SPR operation reduces the error.
- *
- * Input:
- * - clone_tree: A clone tree represented as a digraph.
- * - vertex_map: A map from the columns of the frequency matrix to the
- *   vertices of the clone tree.
- * - F: A frequency matrix represented as a 2D vector.
- * - root: The root of the clone tree.
+ * Finds the optimal way to place vertex u as a child of vertex v,
+ * going over all possible ways of moving v's children around.
  */
-void deterministic_total_violation_hill_climb(
-    digraph<clone_tree_vertex>& clone_tree, const std::unordered_map<int, int>& vertex_map, 
-    const std::vector<std::vector<float>>& F, int root, int max_iterations, size_t sample_id, 
-    int progress_interval = 10
+std::vector<std::pair<float, long long>> score_placements(
+    digraph<clone_tree_vertex> partial_tree,
+    const std::unordered_map<int, int> &vertex_map,
+    const std::vector<std::vector<float>>& F, 
+    int root_index, int root, int u, int v
 ) {
-    size_t ncols = F[0].size(), nrows = F.size();
+    std::vector<int> v_children = partial_tree.successors(v);
+    std::vector<int> children_parents(v_children.size(), v);
 
-    if (max_iterations == -1) {
-        max_iterations = std::numeric_limits<int>::max();
-    }
+    partial_tree.add_edge(v, u);
 
-    std::vector<std::vector<float>> F_transpose(ncols, std::vector<float>(nrows, 0.0));
-    for (size_t i = 0; i < nrows; ++i) {
-        for (size_t j = 0; j < ncols; ++j) {
-            F_transpose[j][i] = F[i][j];
-        }
-    }
-
-    auto A = compute_sum_violation_matrix(clone_tree, vertex_map, F_transpose);
-    float total_violation = 0;
-    for (size_t i = 0; i < ncols; ++i) {
-        for (size_t j = 0; j < nrows; ++j) {
-            total_violation += std::max(A[i][j] - F_transpose[i][j], 0.0f);
-        }
-    }
-
-    /* 
-     * Invariant(s): 
-     *    - total_violation: at the beginning and end of every iteration is equal to the
-     *    total violation of the sum condition.
-     */
-    int count = 0;
-    while (true) {
-        if (count % progress_interval == 0) {
-            spdlog::info("Sample ID {}: iteration {}, total violation: {}", sample_id, count, total_violation);
+    std::vector<std::pair<float, long long>> placements;
+    for (long long i=0; i<(1<<v_children.size()); i++) {
+        for (size_t j = 0; j < v_children.size(); j++) {
+            partial_tree.remove_edge(children_parents[j], v_children[j]);
         }
 
-        /*
-         * run DFS to compute a pre-order traversal of the tree
-         * to enable constant time ancestor queries
-         */
-        std::stack<int> call_stack;
-        call_stack.push(root);
-        std::vector<int> order(clone_tree.nodes().size());
-        int order_index = 0;
-        while(!call_stack.empty()) {
-            int i = call_stack.top();
-            call_stack.pop();
-
-            order[i] = order_index;
-            order_index++;
-
-            for (auto k : clone_tree.successors(i)) {
-                call_stack.push(k);
+        for (size_t j=0; j<v_children.size(); j++) {
+            if (i & (1<<j)) {
+                partial_tree.add_edge(v, v_children[j]);
+                children_parents[j] = v;
+            } else {
+                partial_tree.add_edge(u, v_children[j]);
+                children_parents[j] = u;
             }
         }
 
-        /* 
-         * Go over all possible moves, greedily choosing the move that maximally 
-         * reduces the total violation score. Maintains the invariant that
-         * `total_violation` is equal to the total violation of the sum condition
-         * for the current tree, even after the move is made.
-         */
-        float best_total_violation = total_violation;
-        std::pair<int, int> best_move = {-1, -1};
-        for (auto u : clone_tree.nodes()) {
-            for (auto v : clone_tree.nodes()) {
-                // u is an ancestor of v if and only if order[u] <= order[v]
-                if (u == v || u == root || order[u] <= order[v]) {
-                    continue; 
-                }
-
-                int p = *clone_tree.predecessors(u).begin();
-                int p_column = clone_tree[p].data.id;
-                int u_column = clone_tree[u].data.id;
-                int v_column = clone_tree[v].data.id;
-
-                float diff = 0;
-                for (size_t j = 0; j < A[0].size(); ++j) {
-                    // simulating the SPR move by putting u as a child of v
-                    // i.e. A[j][p] <- A[j][p] - F[j][u]
-                    float A_jp = A[p_column][j] - F_transpose[u_column][j];
-                    diff += std::max(A_jp - F_transpose[p_column][j], 0.0f) - std::max(A[p_column][j] - F_transpose[p_column][j], 0.0f);
-                }
-
-                for (size_t j = 0; j < A[0].size(); ++j) {
-                    // simulating the SPR move by putting u as a child of v
-                    // i.e. A[j][v] <- A[j][v] + F[j][u]
-                    float A_jv = A[v_column][j] + F_transpose[u_column][j];
-                    diff += std::max(A_jv - F_transpose[v_column][j], 0.0f) - std::max(A[v_column][j] - F_transpose[v_column][j], 0.0f);
-                }
-
-                if (diff + total_violation < best_total_violation - 1e-4) {
-                    best_total_violation = diff + total_violation;
-                    best_move = {u, v};
-                }
-            }
-        }
-
-        if (best_move.first == -1) {
-            spdlog::info("Sample ID {} found local minimum -- no SPR moves can improve the score.", sample_id);
-            break;
-        }
-
-        auto [u, v] = best_move;
-        subtree_prune_and_regraft(clone_tree, u, v, root);
-
-        // update the total violation matrix, asymptotically acceptable
-        // since we already spend O(n^2m) time going over all possible moves 
-        A = compute_sum_violation_matrix(clone_tree, vertex_map, F_transpose);
-        total_violation = 0;
-        for (size_t i = 0; i < A.size(); ++i) {
-            for (size_t j = 0; j < A[0].size(); ++j) {
-                total_violation += std::max(A[i][j] - F_transpose[i][j], 0.0f);
-            }
-        }
-
-        count++;
+        invalidate(partial_tree, u, root_index);
+        float score = one_fastbe(partial_tree, vertex_map, F, root);
+        placements.push_back({score, i});
     }
 
-    spdlog::info("Sample ID {} hill climbing completed @ {} iterations", sample_id, count);
+    return placements;
 }
 
-void simulated_annealing(
-    digraph<clone_tree_vertex>& clone_tree, const std::unordered_map<int, int>& vertex_map, 
-    const std::vector<std::vector<float>>& F, int root, float initial_probability, int max_iterations,
-    json& info, bool log_info, size_t sample_id, 
-    int progress_interval = 10, std::mt19937 rng = std::mt19937(std::random_device{}())
+std::pair<digraph<clone_tree_vertex>, std::unordered_map<int, int>> beam_search(
+    const std::vector<std::vector<float>>& F, 
+    int root,
+    std::vector<int> clone_order,
+    size_t beam_width
 ) {
-    std::uniform_int_distribution<int> vertex_distribution(0, clone_tree.nodes().size() - 1);
+    std::unordered_map<int, int> vertex_map;
+    std::vector<digraph<clone_tree_vertex>> partial_trees;
 
-    float current_score = one_fastbe(clone_tree, vertex_map, F, root);
-    float total_change = 0; 
-    int positive_changes = 0;
-    for (int iteration = 0; iteration < 1000; iteration++) {
-        int u = vertex_distribution(rng);
-        while (u == root) {
-            u = vertex_distribution(rng);
+    { 
+        digraph<clone_tree_vertex> initial_tree; // starts with all clones and no edges
+        for (auto clone : clone_order) {
+            vertex_map[clone] = initial_tree.add_vertex(clone_tree_vertex(F.size(), clone));
         }
-
-        int v = vertex_distribution(rng);
-        while (u == v || ancestor(clone_tree, u, v)) {
-            v = vertex_distribution(rng);
-        }
-
-        int parent = *clone_tree.predecessors(u).begin();
-        subtree_prune_and_regraft(clone_tree, u, v, root);
-
-        float score = one_fastbe(clone_tree, vertex_map, F, root);
-        total_change += std::max(score - current_score, 0.0f);
-        positive_changes += score > current_score;
-
-        subtree_prune_and_regraft(clone_tree, u, parent, root);
+        partial_trees.push_back(initial_tree);
     }
 
-    float initial_temp = -1 * (total_change / positive_changes) / std::log(initial_probability);
-    spdlog::info("Sample ID {} initial temperature: {}", sample_id, initial_temp);
+    int root_index = vertex_map[root];
+    int counter = 1;
+    for (size_t j = 0; j < clone_order.size(); ++j) {
+        auto clone = clone_order[j];
 
-    int count = 0, accepted = 0, rejected = 0;
+        spdlog::info("Adding clone {} ({}/{}) to the stepwise addition tree", clone, counter, clone_order.size());
+        counter++;
 
-    digraph<clone_tree_vertex> best_clone_tree = clone_tree;
-    float best_score = current_score;
-    for (; count < max_iterations; count++) {
-        if (log_info) {
-            json iteration_info;
-            iteration_info["iteration"] = count;
-            iteration_info["accepted"] = accepted;
-            iteration_info["rejected"] = rejected;
-            iteration_info["objective_value"] = current_score;
-            iteration_info["best_objective_value"] = best_score;
-            info.push_back(iteration_info);
-        }
+        if (clone == root) continue;
 
-        if (current_score < best_score - 1e-4) {
-            best_score = current_score;
-            best_clone_tree = clone_tree;
-        }
+        std::vector<std::tuple<float, size_t, int, long long>> proposed_trees; // (score, partial tree idx, parent vertex, child placement)
+        int u = vertex_map[clone];
 
-        if (count % progress_interval == 0) {
-            spdlog::info(
-                "Sample ID {}: iteration {}, accepted {}, rejected {}, objective value: {}, best objective value: {}", 
-                sample_id, count, accepted, rejected, current_score, best_score
-            );
-        }
-
-        int u = vertex_distribution(rng);
-        while (u == root) {
-            u = vertex_distribution(rng);
-        }
-
-        int v = vertex_distribution(rng);
-        while (u == v || ancestor(clone_tree, u, v)) {
-            v = vertex_distribution(rng);
-        }
-
-        int parent = *clone_tree.predecessors(u).begin();
-        subtree_prune_and_regraft(clone_tree, u, v, root);
-
-        float score = one_fastbe(clone_tree, vertex_map, F, root);
-
-        float temperature = initial_temp / std::log(count + 2);
-        float prob = std::exp((current_score - score) / (temperature));
-        float rand = std::generate_canonical<float, 10>(rng);
-
-        if (rand <= prob) {
-            current_score = score;
-            accepted++;
-        } else {
-            subtree_prune_and_regraft(clone_tree, u, parent, root);
-            rejected++;
-        }
-    }
-
-    clone_tree = best_clone_tree;
-    spdlog::info("Sample ID {} simulated annealing completed @ {} iterations", sample_id, count);
-}
-
-
-/* 
- * Performs hill climbing search to find clone tree $T$ and usage 
- * matrix $U$ minimizing  the reconstruction error $||F - UB_{T}||_1$ 
- * of the clone tree by using subtree prune and  regraft  operations.  
- *
- * Stops when no SPR operation improves the reconstruction error.
- *
- * Input:
- * - clone_tree: A clone tree represented as a digraph.
- * - vertex_map: A map from the columns of the frequency matrix to the
- *   vertices of the clone tree.
- * - F: A frequency matrix represented as a 2D vector.
- * - root: The root of the clone tree.
- */
-void deterministic_hill_climb(
-    digraph<clone_tree_vertex>& clone_tree, const std::unordered_map<int, int>& vertex_map, 
-    const std::vector<std::vector<float>>& F, int root, int max_iterations, size_t sample_id, 
-    int progress_interval = 10
-) {
-    size_t ncols = F[0].size(), nrows = F.size();
-
-    if (max_iterations == -1) {
-        max_iterations = std::numeric_limits<int>::max();
-    }
-
-    std::vector<std::vector<float>> F_transpose(ncols, std::vector<float>(nrows, 0.0));
-    for (size_t i = 0; i < nrows; ++i) {
-        for (size_t j = 0; j < ncols; ++j) {
-            F_transpose[j][i] = F[i][j];
-        }
-    }
-
-    auto A = compute_sum_violation_matrix(clone_tree, vertex_map, F_transpose);
-    float total_violation = 0;
-    for (size_t i = 0; i < ncols; ++i) {
-        for (size_t j = 0; j < nrows; ++j) {
-            total_violation += std::max(A[i][j] - F_transpose[i][j], 0.0f);
-        }
-    }
-
-    /* 
-     * Invariant(s): 
-     *    - total_violation: at the beginning and end of every iteration is equal to the
-     *    total violation of the sum condition.
-     */
-    int count = 0;
-    while (true) {
-        /*
-         * run DFS to compute a pre-order traversal of the tree
-         * to enable constant time ancestor queries
-         */
-        std::stack<int> call_stack;
-        call_stack.push(root);
-        std::vector<int> order(clone_tree.nodes().size());
-        int order_index = 0;
-        while(!call_stack.empty()) {
-            int i = call_stack.top();
-            call_stack.pop();
-
-            order[i] = order_index;
-            order_index++;
-
-            for (auto k : clone_tree.successors(i)) {
-                call_stack.push(k);
+        for (size_t i = 0; i < partial_trees.size(); ++i) {
+            for (size_t k = 0; k < j; ++k) {
+                int v = vertex_map[clone_order[k]];
+                // assert v != u
+                auto placements = score_placements(partial_trees[i], vertex_map, F, root_index, root, u, v);
+                for (auto [score, placement] : placements) {
+                    proposed_trees.push_back(std::make_tuple(score, i, v, placement));
+                }
             }
         }
 
-        /* 
-         * Construct a priority queue of all possible moves, ranked by 
-         * the amount they reduce the total violation score.  Since the 
-         * total violation is a lower bound on the reconstruction error,
-         * we can stop when the total violation is greater than the 
-         * best score.
-         */
-        std::set<std::tuple<float, int, int>> move_priority_queue;
-        for (auto u : clone_tree.nodes()) { // quadratic iteration complexity: okay?
-            for (auto v : clone_tree.nodes()) {
-                if (u == v || u == root || order[u] <= order[v]) {
-                    continue; 
-                }
-
-                int p = *clone_tree.predecessors(u).begin();
-                int p_column = clone_tree[p].data.id;
-                int u_column = clone_tree[u].data.id;
-                int v_column = clone_tree[v].data.id;
-
-                float diff = 0;
-                for (size_t j = 0; j < nrows; ++j) {
-                    float A_jp = A[p_column][j] - F_transpose[u_column][j];
-                    diff += std::max(A_jp - F_transpose[p_column][j], 0.0f) - std::max(A[p_column][j] - F_transpose[p_column][j], 0.0f);
-                }
-
-                for (size_t j = 0; j < nrows; ++j) {
-                    float A_jv = A[v_column][j] + F_transpose[u_column][j];
-                    diff += std::max(A_jv - F_transpose[v_column][j], 0.0f) - std::max(A[v_column][j] - F_transpose[v_column][j], 0.0f);
-                }
-
-                move_priority_queue.insert({total_violation + diff, u, v});
-           }
-        }
-
-        float best_score = one_fastbe(clone_tree, vertex_map, F, root);
-
-        if (count % progress_interval == 0) {
-            spdlog::info("Sample ID {}: iteration {}, objective value: {}, total violation: {}", sample_id, count, best_score, total_violation);
-        }
-
-        std::pair<int, int> best_move = {-1, -1};
-        int iterations = 0;
-        for (auto [tv, u, v] : move_priority_queue) {
-            if (tv > best_score || iterations >= max_iterations) {
-                break;
-            }
-
-            iterations++;
+        std::sort(proposed_trees.begin(), proposed_trees.end(), [&](auto& a, auto& b) {
+            return std::get<0>(a) < std::get<0>(b);
+        });
         
-            int parent = *clone_tree.predecessors(u).begin();
-            subtree_prune_and_regraft(clone_tree, u, v, root);
-
-            float score = one_fastbe(clone_tree, vertex_map, F, root);
-            subtree_prune_and_regraft(clone_tree, u, parent, root);
-
-            if (score < best_score - 1e-4) {
-                best_score = score;
-                best_move = {u, v};
-            } 
-        }
-
-        if (best_move.first == -1) {
-            spdlog::info("Sample ID {} found local minimum -- no SPR moves can improve the score.", sample_id);
-            break;
-        }
-
-        auto [u, v] = best_move;
-        subtree_prune_and_regraft(clone_tree, u, v, root);
-
-        A = compute_sum_violation_matrix(clone_tree, vertex_map, F_transpose);
-        total_violation = 0;
-        for (size_t i = 0; i < A.size(); ++i) {
-            for (size_t j = 0; j < A[0].size(); ++j) {
-                total_violation += std::max(A[i][j] - F_transpose[i][j], 0.0f);
+        std::vector<digraph<clone_tree_vertex>> new_partial_trees;
+        for (auto [score, i, v, placement] : proposed_trees) {
+            auto tree = partial_trees[i];
+            if (new_partial_trees.size() == beam_width) break;
+            
+            std::vector<int> v_children = tree.successors(v);
+           
+            // remove all edges from v
+            for (auto w : v_children) {
+                tree.remove_edge(v, w);
             }
+
+            // add edges according to placement
+            tree.add_edge(v, u);
+            for (size_t j = 0; j < v_children.size(); j++) {
+                if (placement & (1<<j)) {
+                    tree.add_edge(v, v_children[j]);
+                } else {
+                    tree.add_edge(u, v_children[j]);
+                }
+            }
+    
+            invalidate(tree, u, root_index);
+            new_partial_trees.push_back(tree);
         }
 
-        count++;
+        partial_trees = new_partial_trees;
     }
 
-    spdlog::info("Sample ID {} hill climbing completed @ {} iterations", sample_id, count);
-}
+    std::sort(partial_trees.begin(), partial_trees.end(), [&](auto& a, auto& b) {
+        return one_fastbe(a, vertex_map, F, root) < one_fastbe(b, vertex_map, F, root);
+    });
 
+    // print scores of partial trees
+    for (size_t t = 0; t < partial_trees.size(); ++t) {
+        spdlog::info("Tree {} objective is {}", t, one_fastbe(partial_trees[t], vertex_map, F, root));
+    }
+    
+    return {partial_trees[0], vertex_map};
+}
 /* 
  * This function parses a frequency matrix from a text file and returns it as a 2D vector.
  *
@@ -715,7 +442,6 @@ std::vector<std::vector<float>> parse_frequency_matrix(const std::string& filena
     }
 
     file.close();
-
     return matrix;
 }
 
@@ -755,126 +481,46 @@ void perform_search(const argparse::ArgumentParser &search) {
     size_t nrows = frequency_matrix.size();
     size_t ncols = frequency_matrix[0].size();
 
-    float ancestry_threshold = search.get<float>("ancestry_threshold");
-    digraph<int> ancestry_graph;
-    for (size_t i = 0; i < ncols; ++i) {
-        ancestry_graph.add_vertex(i);
-    }
-
-    int assigned_root = search.get<int>("assigned_root");
-
-    size_t num_edges = 0;
-    for (size_t i = 0; i < ncols; ++i) {
-        for (size_t j = 0; j < ncols; ++j) {
-            if (i == j) continue;
-
-            bool to_add = true;
-            for (size_t k = 0; k < nrows; ++k) {
-                // violates ancestry condition if the frequency of i is less than the frequency of j
-                if (frequency_matrix[k][i] <= frequency_matrix[k][j] - ancestry_threshold) {
-                    to_add = false;
-                }
-            }
-
-            if (to_add) {
-                ancestry_graph.add_edge(i, j);
-                ++num_edges;
-            }
-        }
-    }
-
-    std::map<std::pair<int,int>, double> G_weights;
-    for (auto [i, j] : ancestry_graph.edges()) {
-        G_weights[std::make_pair(i, j)] = 1.0;
-    }
-
-    spdlog::info("Number of edges in ancestry graph: {}", num_edges);
-
-    std::unordered_map<int, int> identity_map;
-    for (size_t i = 0; i < ncols; ++i) {
-        identity_map[i] = i;
-    }
-
-    /* Draw N random spanning trees from the complete graph and then
-     * perform hill climbing on each of them. */
-    std::mutex mtx;
-    std::atomic<size_t> counter(0);
-
-    size_t num_samples = search.get<size_t>("samples");
     unsigned int num_threads = search.get<unsigned int>("threads");
-    std::vector<std::thread> threads(num_threads);
 
-    std::pair<digraph<clone_tree_vertex>, float> best_tree = std::make_pair(digraph<clone_tree_vertex>(), std::numeric_limits<float>::max());
-    for (auto& th : threads) {
-        th = std::thread([&]() {
-            size_t thread_id = std::hash<std::thread::id>{}(std::this_thread::get_id());
-            (void) thread_id; // suppress unused variable warning
-            while (true) {
-                std::random_device rd;
-                std::ranlux48_base gen(rd());
-                size_t i = counter++;
-                if (i >= num_samples) return;  // no more work to do
+    std::random_device rd;
+    std::ranlux48_base gen(rd());
 
-                /* Create a random tree by picking a random spanning tree of G. */
-                auto [clone_tree_int, root] = sample_random_spanning_tree(ancestry_graph, G_weights, gen, assigned_root);
-                digraph<clone_tree_vertex> clone_tree = convert_clone_tree(clone_tree_int, nrows);
-
-                if (search.get<std::string>("algorithm") == "simulated_annealing") {
-                    spdlog::info("Sample ID {}: performing simulated annealing...", i);
-                    json simulated_annealing_info;
-                    simulated_annealing(
-                        clone_tree, identity_map, frequency_matrix, 
-                        root, search.get<float>("initial_probability"), search.get<int>("max_iterations"),
-                        simulated_annealing_info, search.get<bool>("log"), i, search.get<int>("progress_interval")
-                    );
-
-                    spdlog::info("Sample ID {}: performing cleanup hill climb...", i);
-                    deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root, ncols, i, search.get<int>("progress_interval"));
-
-                    std::ofstream json_output(search.get<std::string>("output") + "_sample_" + std::to_string(i) + "_sim_annealing_info.json");
-                    json_output << json(simulated_annealing_info).dump(4) << std::endl;
-               } else if (search.get<std::string>("algorithm") == "two_phase_hill_climb") {
-                    spdlog::info("Sample ID {}: performing total violation hill climb (phase I)...", i);
-                    deterministic_total_violation_hill_climb(clone_tree, identity_map, frequency_matrix, root, ncols, i, search.get<int>("progress_interval"));
-
-                    spdlog::info("Sample ID {}: performing hill climb (phase II)...", i);
-                    deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root, ncols, i, search.get<int>("progress_interval"));
-                } else {
-                    spdlog::info("Sample ID {}: performing hill climb...", i);
-                    deterministic_hill_climb(clone_tree, identity_map, frequency_matrix, root, ncols, i, search.get<int>("progress_interval"));
-                }
-
-                float obj = one_fastbe(clone_tree, identity_map, frequency_matrix, root);
-
-                spdlog::info("Random hill climbed tree objective: {}", obj);
-
-                {
-                    std::lock_guard<std::mutex> lock(mtx);  // lock the mutex to protect shared resources
-                    spdlog::info("Random sample iteration {}, Objective value: {}", i, obj);
-                    if (obj < best_tree.second) {
-                        best_tree = std::make_pair(clone_tree, obj);
-                    }
-                }
-            }
-        });
+    std::vector<int> clone_order(ncols);
+    for (size_t i = 0; i < ncols; ++i) {
+        clone_order[i] = i;
     }
 
-    for (auto& th : threads) {
-        th.join();  // wait for all threads to finish
-    }
+    // use F-sum ordering 
+    std::sort(clone_order.begin(), clone_order.end(), [&](int i, int j) {
+        float sum_i = 0.0;
+        float sum_j = 0.0;
+        for (size_t k = 0; k < nrows; ++k) {
+            sum_i += frequency_matrix[k][i];
+            sum_j += frequency_matrix[k][j];
+        }
+        return sum_i > sum_j;
+    });
 
-    digraph<clone_tree_vertex> min_tree = best_tree.first;
-    float min_obj = best_tree.second;
+    int root = search.get<int>("assigned_root");
+    auto root_it = std::find(clone_order.begin(), clone_order.end(), root);
+    std::iter_swap(clone_order.begin(), root_it);
 
-    std::string adjacency_list = to_adjacency_list(min_tree, identity_map);
+    spdlog::info("Performing beam search to construct seed tree...");
+    auto [clone_tree, vmap] = beam_search(frequency_matrix, root, clone_order, search.get<size_t>("beam_width"));
+
+    float obj = one_fastbe(clone_tree, vmap, frequency_matrix, root);
+    spdlog::info("Objective value: {}", obj);
+
+    std::string adjacency_list = to_adjacency_list(clone_tree, vmap);
 
     std::ofstream adj_output(search.get<std::string>("output") + "_tree.txt");
     adj_output << adjacency_list;
 
-    json output;
-    output["objective_value"] = min_obj;
-    std::ofstream json_output(search.get<std::string>("output") + "_results.json");
-    json_output << output.dump(4) << std::endl;
+    json output_stats;
+    output_stats["objective_value"] = obj;
+    std::ofstream json_output_stats(search.get<std::string>("output") + "_results.json");
+    json_output_stats << output_stats.dump(4) << std::endl;
 
     return;
 }
@@ -924,56 +570,20 @@ int main(int argc, char *argv[])
           .help("prefix of the output files")
           .required();
 
-    search.add_argument("-s", "--samples")
-          .help("number of random samples to use for hill climbing")
-          .default_value((size_t) 100)
-          .scan<'u', size_t>();
-
-    search.add_argument("-r", "--random-seed") // TODO: get working
-          .help("random seed")
-          .default_value(0)
-          .scan<'d', int>();
-
     search.add_argument("-t", "--threads")
           .help("number of threads to use")
           .default_value(std::thread::hardware_concurrency())
           .scan<'u', unsigned int>();
-
-    search.add_argument("-a", "--ancestry_threshold")
-          .help("ancestry threshold")
-          .default_value(1.0f)
-          .scan<'g', float>();
 
     search.add_argument("-f", "--assigned_root")
           .help("assigned root")
           .default_value(0)
           .scan<'d', int>();
 
-    search.add_argument("-p", "--progress_interval")
-          .help("progress interval")
-          .default_value(5)
-          .scan<'d', int>();
-
-    search.add_argument("--log")
-          .help("log all info")
-          .default_value(false)
-          .implicit_value(true);
-
-    search.add_argument("--algorithm")
-            .help("algorithm to use")
-            .default_value(std::string{"simulated_annealing"})
-            .choices("hill_climb", "simulated_annealing", "two_phase_hill_climb");
-
-    search.add_argument("--initial_probability")
-            .help("initial probability of accepting a move during simulated annealing")
-            .default_value(0.1f)
-            .scan<'g', float>();
-
-
-    search.add_argument("--max_iterations")
-            .help("maximum number of simulated annealing iterations")
-            .default_value(1000000)
-            .scan<'d', int>();
+    search.add_argument("-b", "--beam_wdith")
+          .help("beam width")
+          .default_value(10)
+          .scan<'u', unsigned int>();
 
     program.add_subparser(search);
     program.add_subparser(regress);

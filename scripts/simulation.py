@@ -5,6 +5,53 @@ import networkx as nx
 
 from scipy.stats import poisson, binom
 
+def rand_int(rng, a, b):
+    return rng.integers(a, b+1)
+
+def rand_predecessor(node, predecessors, weights, rng):
+    weighted_preds = [(p, weights[(p, node)]) for p in predecessors]
+    total_weight = sum(weight for _, weight in weighted_preds)
+    r = rng.random() * total_weight
+    upto = 0
+    for pred, weight in weighted_preds:
+        if upto + weight >= r:
+            return pred
+        upto += weight
+
+def sample_random_spanning_tree(G, weights, rng, root=None):
+    spanning_tree = nx.DiGraph()
+
+    for u in G.nodes:
+        spanning_tree.add_node(u)
+
+    next_node = [-1] * len(G.nodes)
+    in_tree = [False] * len(G.nodes)
+
+    if root is None:
+        root = rand_int(rng, 0, len(G.nodes) - 1)
+
+    in_tree[root] = True
+    for u in G.nodes:
+        if in_tree[u]:
+            continue
+
+        v = u
+        while not in_tree[v]:
+            pred = list(G.predecessors(v))
+            if len(pred) == 0:
+                raise RuntimeError("Graph is not strongly connected")
+
+            next_node[v] = rand_predecessor(v, pred, weights, rng)
+            v = next_node[v]
+
+        v = u
+        while not in_tree[v]:
+            in_tree[v] = True
+            spanning_tree.add_edge(next_node[v], v)
+            v = next_node[v]
+
+    return spanning_tree, root
+
 """
 Simulate a clonal tree with n nodes and m mutations,
 by assigning each of the m mutations to a random node.
@@ -15,16 +62,22 @@ Output:
       by 1, 2, ..., n - 1. The attached mutations are stored in the 
       'mutation' attribute of the nodes.
 """
-def simulate_clonal_tree(m, n):
+def simulate_clonal_tree(m, n, seed):
     assert m >= n
 
-    tree = nx.DiGraph()
-    tree.add_node(0) 
+    # construct complete graph
+    G = nx.DiGraph()
+    for i in range(n):
+        G.add_node(i)
 
-    for i in range(1, n):
-        parent = np.random.choice(np.arange(i))
-        tree.add_node(i)
-        tree.add_edge(parent, i)
+    for i in range(n):
+        for j in range(n):
+            if i != j:
+                G.add_edge(i, j)
+
+    # sample random spanning tree
+    rng = np.random.default_rng(seed)
+    tree, _ = sample_random_spanning_tree(G, {(i, j): 1 for i in range(n) for j in range(n) if i != j}, rng, root=0)
 
     # Ensures that every node has at least one mutation
     remaining_nodes = list(range(n))
@@ -156,7 +209,7 @@ def main():
 
     np.random.seed(args.seed)
 
-    tree, mutation_to_clone_mapping = simulate_clonal_tree(args.mutations, args.clones)
+    tree, mutation_to_clone_mapping = simulate_clonal_tree(args.mutations, args.clones, args.seed)
     clonal_matrix = construct_clonal_matrix(tree)
     usage_matrix = simulate_usage_matrix(tree, args.samples, args.clones)
     variant_matrix, total_matrix = simulate_read_counts(
