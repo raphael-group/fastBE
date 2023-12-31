@@ -506,8 +506,8 @@ void perform_search(const argparse::ArgumentParser &search) {
     auto root_it = std::find(clone_order.begin(), clone_order.end(), root);
     std::iter_swap(clone_order.begin(), root_it);
 
-    spdlog::info("Performing beam search to construct seed tree...");
-    auto [clone_tree, vmap] = beam_search(frequency_matrix, root, clone_order, search.get<size_t>("beam_width"));
+    spdlog::info("Performing beam search to find tree(s)...");
+    auto [clone_tree, vmap] = beam_search(frequency_matrix, root, clone_order, search.get<unsigned int>("beam_width"));
 
     float obj = one_fastbe(clone_tree, vmap, frequency_matrix, root);
     spdlog::info("Objective value: {}", obj);
@@ -580,9 +580,9 @@ int main(int argc, char *argv[])
           .default_value(0)
           .scan<'d', int>();
 
-    search.add_argument("-b", "--beam_wdith")
+    search.add_argument("-b", "--beam_width")
           .help("beam width")
-          .default_value(10)
+          .default_value(10U)
           .scan<'u', unsigned int>();
 
     program.add_subparser(search);
