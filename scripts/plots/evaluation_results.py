@@ -13,6 +13,7 @@ def set_alpha(ax, alpha):
         patch.set_facecolor((r, g, b, alpha))
 
 algorithm_name_map = {
+    'orchard': 'Orchard',
     'pairtree': 'Pairtree',
     'allele_minima': 'fastBE',
     'calder': 'CALDER',
@@ -24,10 +25,11 @@ algorithm_color_map = {
     'pairtree': sns.color_palette()[0],
     'allele_minima': sns.color_palette()[1],
     'calder': sns.color_palette()[2],
-    'citup': sns.color_palette()[3]
+    'citup': sns.color_palette()[3],
+    'orchard': sns.color_palette()[4],
 }
 
-hue_order = ['allele_minima', 'pairtree', 'calder', 'citup']
+hue_order = ['allele_minima', 'pairtree', 'orchard','calder', 'citup']
 
 def plot_matrix_error(df, output=None, xaxis='samples', xaxislabel='Number of Samples', rotate=False, hue_order=hue_order):
     fig, axes = plt.subplots(figsize=(8, 4), nrows=1, ncols=2)
@@ -136,6 +138,12 @@ def main():
         (df['clones'] > 10)
     ]
 
+
+    # include only parameter settings completed by all algorithms 
+    df = df[df['algorithm'].isin(['pairtree', 'allele_minima', 'orchard'])]
+    df = df[df.groupby(['clones', 'samples', 'mutations', 'coverage', 'seed'])['algorithm'].transform('size') == 3] 
+    print(df)
+
     df['U_error'] = df['U_error'].astype(float) / (df['clones'] * df['samples'])
     df['F_error'] = df['F_error'].astype(float) / (df['clones'] * df['samples'])
     df['true_positives'] = df['positives'] - df['false_negatives']
@@ -213,20 +221,20 @@ def main():
         # hue_order=['allele_minima', 'pairtree']
     # )
 
-    f1_score_df = df[(df['clones'] <= 10) | (df['algorithm'].isin(['allele_minima', 'pairtree']))]
+    f1_score_df = df[(df['clones'] <= 10) | (df['algorithm'].isin(['allele_minima', 'pairtree', 'orchard']))]
     fig, axes = plt.subplots(figsize=(9, 3.5), nrows=1, ncols=2, sharey=True)
     axes = axes[::-1]
     sns.boxplot(
-        data=df[df['algorithm'].isin(['allele_minima', 'pairtree']) & (df['clones'] > 10)], x='samples', 
+        data=df[df['algorithm'].isin(['allele_minima', 'pairtree', 'orchard']) & (df['clones'] > 10)], x='samples', 
         y='f1_score', hue='algorithm', fliersize=0, ax=axes[0], palette=algorithm_color_map,
-        hue_order=['allele_minima', 'pairtree']
+        hue_order=['allele_minima', 'pairtree', 'orchard']
     )
     set_alpha(axes[0], 0.5)
 
     sns.stripplot(
-        data=df[df['algorithm'].isin(['allele_minima', 'pairtree']) & (df['clones'] > 10)], x='samples', 
+        data=df[df['algorithm'].isin(['allele_minima', 'pairtree', 'orchard']) & (df['clones'] > 10)], x='samples', 
         y='f1_score', hue='algorithm', dodge=True, jitter=True, marker='o', alpha=0.5, legend=False, ax=axes[0], 
-        palette=algorithm_color_map, hue_order=['allele_minima', 'pairtree']
+        palette=algorithm_color_map, hue_order=['allele_minima', 'pairtree', 'orchard']
     )
     axes[0].set_xlabel('Number of Samples')
     axes[0].set_ylabel(None)
@@ -250,17 +258,54 @@ def main():
     fig.tight_layout()
     fig.savefig(args.output + '_f1_score.pdf', transparent=True)
 
+    fig, axes = plt.subplots(figsize=(9, 3.5), nrows=1, ncols=2, sharey=True)
+    axes = axes[::-1]
+    sns.boxplot(
+        data=df[df['algorithm'].isin(['allele_minima', 'pairtree', 'orchard']) & (df['clones'] > 10)], x='samples', 
+        y='lp_objective', hue='algorithm', fliersize=0, ax=axes[0], palette=algorithm_color_map,
+        hue_order=['allele_minima', 'pairtree', 'orchard']
+    )
+    set_alpha(axes[0], 0.5)
+
+    sns.stripplot(
+        data=df[df['algorithm'].isin(['allele_minima', 'pairtree', 'orchard']) & (df['clones'] > 10)], x='samples', 
+        y='lp_objective', hue='algorithm', dodge=True, jitter=True, marker='o', alpha=0.5, legend=False, ax=axes[0], 
+        palette=algorithm_color_map, hue_order=['allele_minima', 'pairtree', 'orchard']
+    )
+    axes[0].set_xlabel('Number of Samples')
+    axes[0].set_ylabel(None)
+
+    sns.boxplot(data=f1_score_df, x='clones', y='lp_objective', hue='algorithm', fliersize=0, ax=axes[1], palette=algorithm_color_map, hue_order=hue_order)
+    set_alpha(axes[1], 0.5)
+    sns.stripplot(
+        data=f1_score_df, x='clones', y='lp_objective', hue='algorithm', 
+        dodge=True, jitter=True, marker='o', alpha=0.5, legend=False, ax=axes[1], palette=algorithm_color_map,
+        hue_order=hue_order
+    )
+    axes[1].set_xlabel('Number of Clones')
+    axes[1].set_ylabel('LP Objective')
+    axes[1].legend(title='Algorithm')
+    axes[1].get_legend().remove()
+
+    handles, labels = axes[1].get_legend_handles_labels()
+    labels = list(map(lambda x: algorithm_name_map[x], labels))
+    axes[0].legend(handles, labels, title='Algorithm', loc='upper right', bbox_to_anchor=(1.5, 0.75))
+
+    fig.tight_layout()
+    fig.savefig(args.output + '_lp_objective.pdf', transparent=True)
+
+
     fig, ax = plt.subplots(figsize=(8, 3.5), nrows=1, ncols=1)
     axes = [ax]
     sns.boxplot(
-        data=df[df['algorithm'].isin(['allele_minima', 'pairtree'])], x='clone_and_sample', y='elapsed_time', 
-        hue='algorithm', fliersize=0, palette=algorithm_color_map, ax=axes[0], hue_order=['allele_minima', 'pairtree']
+        data=df[df['algorithm'].isin(['allele_minima', 'pairtree', 'orchard'])], x='clone_and_sample', y='elapsed_time', 
+        hue='algorithm', fliersize=0, palette=algorithm_color_map, ax=axes[0], hue_order=['allele_minima', 'pairtree', 'orchard']
     )
     set_alpha(axes[0], 0.5)
     sns.stripplot(
-        data=df[df['algorithm'].isin(['allele_minima', 'pairtree'])], x='clone_and_sample', y='elapsed_time', 
+        data=df[df['algorithm'].isin(['allele_minima', 'pairtree', 'orchard'])], x='clone_and_sample', y='elapsed_time', 
         hue='algorithm', dodge=True, jitter=True, marker='o', alpha=0.5, legend=False, palette=algorithm_color_map, ax=axes[0],
-        hue_order=['allele_minima', 'pairtree']
+        hue_order=['allele_minima', 'pairtree', 'orchard']
     )
     axes[0].set(yscale='log')
     axes[0].set_xlabel('(Number of Clones, Number of Samples)')
@@ -279,13 +324,13 @@ def main():
     fig, ax = plt.subplots(figsize=(4, 3.5), nrows=1, ncols=1)
     axes = [ax]
     sns.boxplot(
-        data=df[df['algorithm'].isin(['allele_minima', 'pairtree']) & (df['clones'] >= 30)], x='samples', y='elapsed_time', 
+        data=df[df['algorithm'].isin(['allele_minima', 'pairtree', 'orchard']) & (df['clones'] >= 30)], x='samples', y='elapsed_time', 
         hue='algorithm', fliersize=0, palette=algorithm_color_map, ax=axes[0]
     )
 
     set_alpha(axes[0], 0.5)
     sns.stripplot(
-        data=df[df['algorithm'].isin(['allele_minima', 'pairtree']) & (df['clones'] >= 30)], x='samples', y='elapsed_time', 
+        data=df[df['algorithm'].isin(['allele_minima', 'pairtree', 'orchard']) & (df['clones'] >= 30)], x='samples', y='elapsed_time', 
         hue='algorithm', dodge=True, jitter=True, marker='o', alpha=0.5, legend=False, palette=algorithm_color_map, ax=axes[0]
     )
 
@@ -303,13 +348,13 @@ def main():
     fig, ax = plt.subplots(figsize=(4, 3.5), nrows=1, ncols=1)
     axes = [ax]
     sns.boxplot(
-        data=df[df['algorithm'].isin(['allele_minima', 'pairtree'])], x='clones', y='elapsed_time', 
+        data=df[df['algorithm'].isin(['allele_minima', 'pairtree', 'orchard'])], x='clones', y='elapsed_time', 
         hue='algorithm', fliersize=0, palette=algorithm_color_map, ax=axes[0]
     )
 
     set_alpha(axes[0], 0.5)
     sns.stripplot(
-        data=df[df['algorithm'].isin(['allele_minima', 'pairtree'])], x='clones', y='elapsed_time', 
+        data=df[df['algorithm'].isin(['allele_minima', 'pairtree', 'orchard'])], x='clones', y='elapsed_time', 
         hue='algorithm', dodge=True, jitter=True, marker='o', alpha=0.5, legend=False, palette=algorithm_color_map, ax=axes[0]
     )
 
@@ -327,7 +372,7 @@ def main():
     print(df[df['clones'] > 10].groupby(['algorithm', 'clones'])['f1_score'].mean())
     print(df[df['clones'] <= 10].algorithm.value_counts())
     print(df[~df['algorithm'].isin(['calder', 'citup'])].algorithm.value_counts())
-    print(df[df['algorithm'].isin(['allele_minima', 'pairtree']) & (df['clones'] > 10)].groupby(['algorithm', 'samples'])['f1_score'].mean())
+    print(df[df['algorithm'].isin(['allele_minima', 'pairtree', 'orchard']) & (df['clones'] > 10)].groupby(['algorithm', 'samples'])['f1_score'].mean())
 
     plt.show()
 
