@@ -276,8 +276,9 @@ std::vector<std::vector<float>> compute_sum_violation_matrix(
 }
 
 /* 
- * Finds the optimal way to place vertex u as a child of vertex v,
- * going over all possible ways of moving v's children around.
+ * Computes the score of all 2^{|child(v)|} ways to place vertex u 
+ * as a child of vertex v when allowing the children of v to be 
+ * placed as children of u.
  */
 std::vector<std::pair<float, long long>> score_placements(
     digraph<clone_tree_vertex> partial_tree,
@@ -314,11 +315,15 @@ std::vector<std::pair<float, long long>> score_placements(
     return placements;
 }
 
+/* 
+ * Performs beam search to infer a clone tree from a frequency matrix.
+ */
 std::pair<digraph<clone_tree_vertex>, std::unordered_map<int, int>> beam_search(
     const std::vector<std::vector<float>>& F, 
     int root,
     std::vector<int> clone_order,
-    size_t beam_width
+    size_t beam_width,
+    unsigned int num_threads
 ) {
     std::unordered_map<int, int> vertex_map;
     std::vector<digraph<clone_tree_vertex>> partial_trees;
@@ -336,22 +341,33 @@ std::pair<digraph<clone_tree_vertex>, std::unordered_map<int, int>> beam_search(
     for (size_t j = 0; j < clone_order.size(); ++j) {
         auto clone = clone_order[j];
 
-        spdlog::info("Adding clone {} ({}/{}) to the stepwise addition tree", clone, counter, clone_order.size());
+        spdlog::info("Adding clone {} ({}/{}) to the partially construct trees", clone, counter, clone_order.size());
         counter++;
 
         if (clone == root) continue;
 
+        std::mutex proposed_trees_mutex;
         std::vector<std::tuple<float, size_t, int, long long>> proposed_trees; // (score, partial tree idx, parent vertex, child placement)
         int u = vertex_map[clone];
 
+        // use threads to parallelize this loop
         for (size_t i = 0; i < partial_trees.size(); ++i) {
-            for (size_t k = 0; k < j; ++k) {
-                int v = vertex_map[clone_order[k]];
-                // assert v != u
-                auto placements = score_placements(partial_trees[i], vertex_map, F, root_index, root, u, v);
-                for (auto [score, placement] : placements) {
-                    proposed_trees.push_back(std::make_tuple(score, i, v, placement));
-                }
+            std::vector<std::thread> threads;
+            for (size_t k = 0; k < num_threads; ++k) {
+                threads.push_back(std::thread([&](size_t i, size_t k) {
+                    for (size_t l = k; l < j; l += num_threads) {
+                        int v = vertex_map[clone_order[l]];
+                        auto placements = score_placements(partial_trees[i], vertex_map, F, root_index, root, u, v);
+                        for (auto [score, placement] : placements) {
+                            std::lock_guard<std::mutex> lock(proposed_trees_mutex);
+                            proposed_trees.push_back(std::make_tuple(score, i, v, placement));
+                        }
+                    }
+                }, i, k));
+            }
+
+            for (auto& thread : threads) {
+                thread.join();
             }
         }
 
@@ -399,6 +415,7 @@ std::pair<digraph<clone_tree_vertex>, std::unordered_map<int, int>> beam_search(
     
     return {partial_trees[0], vertex_map};
 }
+
 /* 
  * This function parses a frequency matrix from a text file and returns it as a 2D vector.
  *
@@ -483,15 +500,12 @@ void perform_search(const argparse::ArgumentParser &search) {
 
     unsigned int num_threads = search.get<unsigned int>("threads");
 
-    std::random_device rd;
-    std::ranlux48_base gen(rd());
-
     std::vector<int> clone_order(ncols);
     for (size_t i = 0; i < ncols; ++i) {
         clone_order[i] = i;
     }
 
-    // use F-sum ordering 
+    // use F-sum ordering to order clones
     std::sort(clone_order.begin(), clone_order.end(), [&](int i, int j) {
         float sum_i = 0.0;
         float sum_j = 0.0;
@@ -507,7 +521,13 @@ void perform_search(const argparse::ArgumentParser &search) {
     std::iter_swap(clone_order.begin(), root_it);
 
     spdlog::info("Performing beam search to find tree(s)...");
-    auto [clone_tree, vmap] = beam_search(frequency_matrix, root, clone_order, search.get<unsigned int>("beam_width"));
+    auto [clone_tree, vmap] = beam_search(
+        frequency_matrix, 
+        root, 
+        clone_order, 
+        search.get<unsigned int>("beam_width"),
+        num_threads
+    );
 
     float obj = one_fastbe(clone_tree, vmap, frequency_matrix, root);
     spdlog::info("Objective value: {}", obj);
