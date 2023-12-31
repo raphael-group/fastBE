@@ -341,7 +341,7 @@ std::pair<digraph<clone_tree_vertex>, std::unordered_map<int, int>> beam_search(
     for (size_t j = 0; j < clone_order.size(); ++j) {
         auto clone = clone_order[j];
 
-        spdlog::info("Adding clone {} ({}/{}) to the partially construct trees", clone, counter, clone_order.size());
+        spdlog::info("Adding clone {} ({}/{}) to the partially constructed trees", clone, counter, clone_order.size());
         counter++;
 
         if (clone == root) continue;
@@ -350,7 +350,6 @@ std::pair<digraph<clone_tree_vertex>, std::unordered_map<int, int>> beam_search(
         std::vector<std::tuple<float, size_t, int, long long>> proposed_trees; // (score, partial tree idx, parent vertex, child placement)
         int u = vertex_map[clone];
 
-        // use threads to parallelize this loop
         for (size_t i = 0; i < partial_trees.size(); ++i) {
             std::vector<std::thread> threads;
             for (size_t k = 0; k < num_threads; ++k) {
