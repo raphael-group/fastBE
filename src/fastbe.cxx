@@ -181,71 +181,6 @@ float one_fastbe(
 }
 
 /*
- * Given a frequency matrix $F$ and a clone tree $T$, this function
- * finds the minimizing value of $$\sum_{i=1}^m\lVert F_i - (UB)_i \rVert_1$$ 
- * over all usage matrices in $\mathcal{O}(mn^2)$ using dynamic programming.
- *
- * Input: 
- *  - clone_tree: A clone tree represented as a digraph.
- *  - vertex_map: A map from the columns of the frequency matrix to the 
- *    vertices of the clone tree.
- *  - columns: A vector of column indices to consider.
- *  - F: A frequency matrix represented as a 2D vector.
- *
- * Requirement:
- *  - The selected `columns` must coincide with the vertices of the clone tree.
-*/
-float one_fastbe(
-    const digraph<int>& clone_tree, const std::unordered_map<int, int>& vertex_map, 
-    const std::vector<std::vector<float>>& F, const std::vector<int>& columns,
-    int root
-) {
-    size_t nrows = F.size();
-
-    std::vector<std::vector<float>> W(nrows, std::vector<float>(columns.size(), 0.0));
-
-    for (size_t j = 0; j < nrows; ++j) {
-        for (size_t i = 0; i < columns.size(); ++i) {
-            W[j][i] = F[j][columns[i]];
-            for (auto k : clone_tree.successors(vertex_map.at(columns[i]))) {
-                W[j][i] -= F[j][clone_tree[k].data];
-            }
-        }
-    }
-
-    std::unordered_map<int, int> columns_inv(columns.size());
-    for (size_t i = 0; i < columns.size(); ++i) {
-        columns_inv[columns[i]] = i;
-    }
-
-    // i corresponds to column we are at in F!
-    std::function<PiecewiseLinearF(size_t, size_t)> one_fastbe_recursive = [&](size_t j, size_t i) {
-        if (clone_tree.out_degree(vertex_map.at(i)) == 0) {
-            return PiecewiseLinearF({W[j][columns_inv[i]]}, 0); 
-        }
-
-        PiecewiseLinearF g_out({W[j][columns_inv[i]]}, 0);
-        for (auto k : clone_tree.successors(vertex_map.at(i))) {
-            auto f = one_fastbe_recursive(j, clone_tree[k].data);
-            f.compute_minimizer();
-            g_out.addInPlace(std::move(f));
-        }
-
-        return g_out;
-    };
-
-    float obj = 0;
-    for (size_t j = 0; j < nrows; ++j) {
-        auto f = one_fastbe_recursive(j, root);
-        f.compute_minimizer();
-        f.addInPlace(PiecewiseLinearF({1 - F[j][0]}, 0));
-        obj += f.minimizer();
-    }
-
-    return -1 * obj;
-}
-
-/*
  * Computes the matrix for the total violation of the sum condition 
  * to the frequency matrix $F$ and the clone tree $T$. In particular,
  *    $$A[i, j] = \sum_{k\in C(j)} F_{i,k}$$
@@ -462,18 +397,18 @@ std::vector<std::vector<float>> parse_frequency_matrix(const std::string& filena
 }
 
 void perform_regression(const argparse::ArgumentParser &regress) {
-    auto [clone_tree, vertex_map] = parse_adjacency_list(regress.get<std::string>("clone_tree"));
+    auto [clone_tree_int, vertex_map] = parse_adjacency_list(regress.get<std::string>("clone_tree"));
     std::vector<std::vector<float>> frequency_matrix = parse_frequency_matrix(regress.get<std::string>("frequency_matrix"));
-
-    std::vector<int> columns(vertex_map.size());
-    for (auto [v, i] : vertex_map) {
-        columns[i] = v;
-    }
+    auto clone_tree = convert_clone_tree(clone_tree_int, frequency_matrix.size());
 
     auto start = std::chrono::high_resolution_clock::now();
-    float obj = one_fastbe(clone_tree, vertex_map, frequency_matrix, columns, 0);
+    float obj = one_fastbe(clone_tree, vertex_map, frequency_matrix, 0);
     for (size_t i = 0; i < regress.get<size_t>("num_reps") - 1; ++i) {
-        one_fastbe(clone_tree, vertex_map, frequency_matrix, columns, 0);
+        for (auto vertex : clone_tree.nodes()) {
+            clone_tree[vertex].data.valid = false;
+        }
+
+        one_fastbe(clone_tree, vertex_map, frequency_matrix, 0);
     }
 
     auto end = std::chrono::high_resolution_clock::now();
