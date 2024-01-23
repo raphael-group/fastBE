@@ -77,6 +77,33 @@ digraph<clone_tree_vertex> convert_clone_tree(const digraph<int>& clone_tree, si
 }
 
 /*
+ * Prunes the subtree rooted at vertex u and regrafts as a child of 
+ * vertex v. This function assumes that u is not the root of the tree.
+ */
+void subtree_prune_and_regraft(digraph<clone_tree_vertex>& tree, int u, int v, int root) {
+    int parent = *tree.predecessors(u).begin();
+    tree.remove_edge(parent, u);
+    tree.add_edge(v, u);
+
+    std::stack<int> s;
+    s.push(u);
+    s.push(parent);
+
+    // walk from vertices u and v to root and update valid flags
+    while (!s.empty()) {
+        int node_id = s.top();
+        s.pop();
+
+        tree[node_id].data.valid = false;
+
+        if (node_id == root) continue;
+
+        int parent = *tree.predecessors(node_id).begin();
+        s.push(parent);
+    }
+}
+
+/*
  * Invalidates all vertices on the path from u to root.
  */ 
 void invalidate(digraph<clone_tree_vertex>& tree, int u, int root) {
@@ -401,23 +428,64 @@ void perform_regression(const argparse::ArgumentParser &regress) {
     std::vector<std::vector<float>> frequency_matrix = parse_frequency_matrix(regress.get<std::string>("frequency_matrix"));
     auto clone_tree = convert_clone_tree(clone_tree_int, frequency_matrix.size());
 
+    int root = 0;
     auto start = std::chrono::high_resolution_clock::now();
-    float obj = one_fastbe(clone_tree, vertex_map, frequency_matrix, 0);
+    float obj = one_fastbe(clone_tree, vertex_map, frequency_matrix, root);
     for (size_t i = 0; i < regress.get<size_t>("num_reps") - 1; ++i) {
         for (auto vertex : clone_tree.nodes()) {
             clone_tree[vertex].data.valid = false;
         }
 
-        one_fastbe(clone_tree, vertex_map, frequency_matrix, 0);
+        one_fastbe(clone_tree, vertex_map, frequency_matrix, root);
     }
 
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
+    std::vector<std::pair<int,int>> subtree_prune_and_regraft_operations;
+    for (auto u : clone_tree.nodes()) {
+        for (auto v : clone_tree.nodes()) {
+            if (u == v || u == root || ancestor(clone_tree, u, v)) continue;
+            subtree_prune_and_regraft_operations.push_back({u, v});
+        }
+    }
+
+    auto start_spr_time = std::chrono::high_resolution_clock::now();
+    for (auto [u, v] : subtree_prune_and_regraft_operations) {
+        int parent = *clone_tree.predecessors(u).begin();
+        subtree_prune_and_regraft(clone_tree, u, v, root);
+        one_fastbe(clone_tree, vertex_map, frequency_matrix, root);
+        subtree_prune_and_regraft(clone_tree, u, parent, root);
+    }
+
+    auto end_spr_time = std::chrono::high_resolution_clock::now();
+    auto spr_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_spr_time - start_spr_time);
+    spdlog::info("Warm start time for all SPRs: {} s", spr_duration.count() / 1e9);
+
+    auto start_spr_time_cold = std::chrono::high_resolution_clock::now();
+    for (auto [u, v] : subtree_prune_and_regraft_operations) {
+        for (auto vertex : clone_tree.nodes()) {
+            clone_tree[vertex].data.valid = false;
+        }
+
+        int parent = *clone_tree.predecessors(u).begin();
+        subtree_prune_and_regraft(clone_tree, u, v, root);
+        one_fastbe(clone_tree, vertex_map, frequency_matrix, root);
+        subtree_prune_and_regraft(clone_tree, u, parent, root);
+    }
+
+    auto end_spr_time_cold = std::chrono::high_resolution_clock::now();
+    auto spr_duration_cold = std::chrono::duration_cast<std::chrono::nanoseconds>(end_spr_time_cold - start_spr_time_cold);
+    spdlog::info("Cold start time for all SPRs: {} s", spr_duration_cold.count() / 1e9);
+
     json output;
     output["time (ns)"] = duration.count();
     output["time (s)"]  = duration.count() / 1e9;
     output["objective_value"] = obj;
+    output["warm start spr neighborhood scoring time (ns)"] = spr_duration.count();
+    output["warm start spr neighborhood scoring time (s)"] = spr_duration.count() / 1e9;
+    output["cold start spr neighborhood scoring time (ns)"] = spr_duration_cold.count();
+    output["cold start spr neighborhood scoring time (s)"] = spr_duration_cold.count() / 1e9;
 
     std::ofstream output_file(regress.get<std::string>("output") + "_results.json");
     output_file << output.dump(4) << std::endl;
