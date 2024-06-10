@@ -1,4 +1,4 @@
-## fastBE: A regression based approach to phylogenetic reconstruction from bulk DNA sequencing of tumors
+## fastBE: An ultrafast method for phylogenetic reconstruction from bulk DNA sequencing data
 
 *fastBE* is a method for inferring the evolutionary history
 of tumors from multi-sample bulk DNA sequencing data.
@@ -10,9 +10,25 @@ $\ell_1$-regression problem.
 
 If you find this tool useful in your research, please cite us at:
 ```
+@article{schmidt2024regression,
+  title={A regression based approach to phylogenetic reconstruction from multi-sample bulk DNA sequencing of tumors},
+  author={Schmidt, Henri and Raphael, Benjamin J},
+  journal={bioRxiv},
+  pages={2024--04},
+  year={2024},
+  publisher={Cold Spring Harbor Laboratory}
+}
 ```
 
-### Installation
+## Installation
+
+#### Option 1: conda install
+
+#### Option 2: Pre-compiled binaries
+
+
+
+#### Option 3: Build from source
 
 `fastBE` is implemented in C++ and is packaged with the dependencies
 needed to execute the program. In particular, the only dependencies are
