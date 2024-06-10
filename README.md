@@ -24,14 +24,15 @@ If you find this tool useful in your research, please cite us at:
 
 #### Option 1: conda install
 
+
 #### Option 2: Pre-compiled binaries
 
-
+Pre-compiled binaries for `fastBE` are available for both macOS and Linux under the releases section. To install, simply copy the binary into a directory which is recognized by your shell.
 
 #### Option 3: Build from source
 
 `fastBE` is implemented in C++ and is packaged with the dependencies
-needed to execute the program. In particular, the only dependencies are
+needed to execute the program. The only dependencies are
 a recent version of CMAKE and a modern C++17 compliant compiler.
 
 To build `fastBE` from source, first clone the repository and its submodules:
