@@ -96,7 +96,10 @@ $\lVert F - UB_{\mathcal{T}} \rVert_1$ over all usage matrices $U$.
 > frequency matrix. By default this root vertex is set to be $0$, or the
 > first column of the frequency matrix. When the root vertex is unknown,
 > it suffices to append an extra column to the beginning of the frequency matrix 
-> and specify the root as $0$. As best practice, keep the root vertex
+> and specify the root as $0$. 
+
+> [!TIP]
+> As best practice, keep the root vertex
 > as the first column of the frequency matrix.
 
 ### Input format
