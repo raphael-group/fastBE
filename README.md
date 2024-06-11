@@ -99,8 +99,7 @@ $\lVert F - UB_{\mathcal{T}} \rVert_1$ over all usage matrices $U$.
 > and specify the root as $0$. 
 
 > [!TIP]
-> As best practice, keep the root vertex
-> as the first column of the frequency matrix.
+> Use the first column of the frequency matrix as the mutation off the root.
 
 ### Input format
 
