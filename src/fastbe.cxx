@@ -139,7 +139,7 @@ float one_fastbe(
 ) {
     size_t nrows = F.size();
 
-    std::stack<int> call_stack;
+    std::stack<int> call_stack; // contains vertices to visit in column coordinates
     call_stack.push(root);
     while(!call_stack.empty()) {
         int i = call_stack.top();
@@ -198,7 +198,7 @@ float one_fastbe(
 
     float obj = 0;
     for (size_t j = 0; j < nrows; ++j) {
-        PiecewiseLinearF f = clone_tree[root].data.fs[j];
+        PiecewiseLinearF f = clone_tree[vertex_map.at(root)].data.fs[j];
         f.compute_minimizer();
         f.addInPlace(PiecewiseLinearF({1 - F[j][root]}, 0));
         obj += f.minimizer();
@@ -287,7 +287,7 @@ std::pair<digraph<clone_tree_vertex>, std::unordered_map<int, int>> beam_search(
     size_t beam_width,
     unsigned int num_threads
 ) {
-    std::unordered_map<int, int> vertex_map;
+    std::unordered_map<int, int> vertex_map; // maps from the clone id (column idx) to the vertex id in the clone tree
     std::vector<digraph<clone_tree_vertex>> partial_trees;
 
     { 
@@ -299,6 +299,7 @@ std::pair<digraph<clone_tree_vertex>, std::unordered_map<int, int>> beam_search(
     }
 
     int root_index = vertex_map[root];
+
     int counter = 1;
     for (size_t j = 0; j < clone_order.size(); ++j) {
         auto clone = clone_order[j];
@@ -428,9 +429,10 @@ void perform_regression(const argparse::ArgumentParser &regress) {
     std::vector<std::vector<float>> frequency_matrix = parse_frequency_matrix(regress.get<std::string>("frequency_matrix"));
     auto clone_tree = convert_clone_tree(clone_tree_int, frequency_matrix.size());
 
-    int root = 0;
+    int root = regress.get<int>("assigned_root");
     auto start = std::chrono::high_resolution_clock::now();
     float obj = one_fastbe(clone_tree, vertex_map, frequency_matrix, root);
+
     for (size_t i = 0; i < regress.get<size_t>("num_reps") - 1; ++i) {
         for (auto vertex : clone_tree.nodes()) {
             clone_tree[vertex].data.valid = false;
@@ -442,50 +444,10 @@ void perform_regression(const argparse::ArgumentParser &regress) {
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
-    std::vector<std::pair<int,int>> subtree_prune_and_regraft_operations;
-    for (auto u : clone_tree.nodes()) {
-        for (auto v : clone_tree.nodes()) {
-            if (u == v || u == root || ancestor(clone_tree, u, v)) continue;
-            subtree_prune_and_regraft_operations.push_back({u, v});
-        }
-    }
-
-    auto start_spr_time = std::chrono::high_resolution_clock::now();
-    for (auto [u, v] : subtree_prune_and_regraft_operations) {
-        int parent = *clone_tree.predecessors(u).begin();
-        subtree_prune_and_regraft(clone_tree, u, v, root);
-        one_fastbe(clone_tree, vertex_map, frequency_matrix, root);
-        subtree_prune_and_regraft(clone_tree, u, parent, root);
-    }
-
-    auto end_spr_time = std::chrono::high_resolution_clock::now();
-    auto spr_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_spr_time - start_spr_time);
-    spdlog::info("Warm start time for all SPRs: {} s", spr_duration.count() / 1e9);
-
-    auto start_spr_time_cold = std::chrono::high_resolution_clock::now();
-    for (auto [u, v] : subtree_prune_and_regraft_operations) {
-        for (auto vertex : clone_tree.nodes()) {
-            clone_tree[vertex].data.valid = false;
-        }
-
-        int parent = *clone_tree.predecessors(u).begin();
-        subtree_prune_and_regraft(clone_tree, u, v, root);
-        one_fastbe(clone_tree, vertex_map, frequency_matrix, root);
-        subtree_prune_and_regraft(clone_tree, u, parent, root);
-    }
-
-    auto end_spr_time_cold = std::chrono::high_resolution_clock::now();
-    auto spr_duration_cold = std::chrono::duration_cast<std::chrono::nanoseconds>(end_spr_time_cold - start_spr_time_cold);
-    spdlog::info("Cold start time for all SPRs: {} s", spr_duration_cold.count() / 1e9);
-
     json output;
     output["time (ns)"] = duration.count();
     output["time (s)"]  = duration.count() / 1e9;
     output["objective_value"] = obj;
-    output["warm start spr neighborhood scoring time (ns)"] = spr_duration.count();
-    output["warm start spr neighborhood scoring time (s)"] = spr_duration.count() / 1e9;
-    output["cold start spr neighborhood scoring time (ns)"] = spr_duration_cold.count();
-    output["cold start spr neighborhood scoring time (s)"] = spr_duration_cold.count() / 1e9;
 
     std::ofstream output_file(regress.get<std::string>("output") + "_results.json");
     output_file << output.dump(4) << std::endl;
@@ -502,7 +464,7 @@ void perform_search(const argparse::ArgumentParser &search) {
 
     unsigned int num_threads = search.get<unsigned int>("threads");
 
-    std::vector<int> clone_order(ncols);
+    std::vector<int> clone_order(ncols); // map from order to clone
     for (size_t i = 0; i < ncols; ++i) {
         clone_order[i] = i;
     }
@@ -520,7 +482,8 @@ void perform_search(const argparse::ArgumentParser &search) {
 
     int root = search.get<int>("assigned_root");
     auto root_it = std::find(clone_order.begin(), clone_order.end(), root);
-    std::iter_swap(clone_order.begin(), root_it);
+    clone_order.erase(root_it);
+    clone_order.insert(clone_order.begin(), root);
 
     spdlog::info("Performing beam search to find tree(s)...");
     auto [clone_tree, vmap] = beam_search(
@@ -584,6 +547,11 @@ int main(int argc, char *argv[])
            .help("number of times to repeat the regression for benchmarking")
            .default_value((size_t) 1)
            .scan<'u', size_t>();
+
+    regress.add_argument("-f", "--assigned_root")
+          .help("assigned root")
+          .default_value(0)
+          .scan<'d', int>();
 
     search.add_argument("frequency_matrix")
           .help("TXT file containing the frequency matrix");
