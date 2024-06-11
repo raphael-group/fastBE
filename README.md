@@ -24,10 +24,17 @@ If you find this tool useful in your research, please cite us at:
 
 #### Option 1: conda install
 
+To install using `conda` execute the following command:
+```
+$ conda install schmidt73::fastbe
+```
+Currently, `fastBE` is only available through `conda` for Linux. Additional
+platforms will be supported upon request.
 
 #### Option 2: Pre-compiled binaries
 
-Pre-compiled binaries for `fastBE` are available for both macOS and Linux under the releases section. To install, simply copy the binary into a directory which is recognized by your shell.
+Pre-compiled binaries for `fastBE` are available for both macOS and Linux under the releases section. 
+To install, simply copy the binary into a directory which is recognized by your shell.
 
 #### Option 3: Build from source
 
@@ -49,7 +56,7 @@ $ make
 ```
 The output binary will be located at `build/src/fastbe`.
 
-### Usage
+## Usage
 
 To run *fastbe*, simply execute the binary. 
 ```
@@ -65,32 +72,42 @@ Subcommands:
 ```
 
 The two modes of fastbe are `search` and `regress`. The `search` mode
-solves the variant allele frequency $\ell_1$-deconvolution problem, 
+infers the phylogenetic tree best fitting the input frequency matrix, while
+the `regress` mode infers the fit of the input tree to the frequency matrix.
+If one is interested in inferring a phylogenetic tree
+from a frequency matrix, the `search` mode should be used. 
+
+Formally, the `search` mode
+solves the variant allele frequency $\ell_1$-factorization problem, 
 while the `regress` mode solves the variant allele frequency 
 $\ell_1$-regression problem, both of which are defined in 
 our manuscript. 
-
-The `search` mode takes as input an $m \times n$ frequency matrix $F$ and outputs
-an $n$-clonal tree that best fits the frequency matrix. **Important note: the search
-command requires a root vertex specified with the `-f/--assigned-root` flag.**
-By default this root vertex is set to be $0$. When the root vertex is unknown,
-it suffices to append an extra column to the beginning of the frequency matrix 
-and specify the root as $0$.
-
+The `search` mode takes as input an $m \times n$ frequency matrix $F$ 
+and outputs an $n$-clonal tree that best fits the frequency matrix. 
 The `regress` mode
 takes as input an $m \times n$ frequency matrix $F$ and an $n$-clonal
 tree $\mathcal{T}$ and outputs the minimum value of 
 $\lVert F - UB_{\mathcal{T}} \rVert_1$ over all usage matrices $U$.
+
+[!IMPORTANT] 
+The search command requires a root vertex specified with the 
+`-f/--assigned-root` flag, corresponding to the appropriate column of the 
+frequency matrix. By default this root vertex is set to be $0$, or the
+first column of the frequency matrix. When the root vertex is unknown,
+it suffices to append an extra column to the beginning of the frequency matrix 
+and specify the root as $0$. As best practice, keep the root vertex
+as the first column of the frequency matrix.
 
 ### Input format
 
 The input format for the `search` mode of *fastbe* consists of a frequency 
 matrix $F$ in `.txt` format. Rows are separated by newlines
 and columns are separated by spaces. Rows correspond
-to distinct samples and columns correspond to distinct mutation clusters.
+to distinct samples and columns correspond to distinct mutations 
+(or mutation clusters).
 More formally, $F_{ij}$ is the frequency of the $j^{\text{th}}$ mutation
-cluster in the $i^{\text{th}}$ sample. As an example, a frequency matrix $F$ 
-describing $20$ samples and $10$ clones is:
+in the $i^{\text{th}}$ sample. As an example, a frequency matrix $F$ 
+describing $20$ samples and $10$ mutations is:
 ```
 1.0000 0.9801 0.0000 0.8265 0.0156 0.3683 0.2450 0.1218 0.1260 0.0000
 1.0000 1.0000 0.0000 0.1257 0.0000 0.0000 0.0000 0.0000 0.0000 0.1436
@@ -133,7 +150,9 @@ which consists of $10$ clones rooted at the $0$ vertex is:
 9
 ```
 
-The above clonal tree $\mathcal{T}$ is provided as an input file at `examples/sim_tree.txt`.
+The above clonal tree $\mathcal{T}$ is provided as an input file at `examples/sim_tree.txt`. Each
+vertex in the adjacency list corresponds to a clone. The name of the vertex corresponds
+to the index of the mutation in the frequency matrix on the edge leading to the vertex.
 
 The above frequency matrix and clonal tree were generated using the command,
 `python scripts/simulation.py --clones 20 --samples 10 --coverage 100 --seed 0 --mutations 100 --output examples/sim`
@@ -142,9 +161,9 @@ read depth of $100\times$ and $100$ mutations distribution across the $10$ mutat
 Several other files such as the mutation to clone mapping, the ground truth usage matrix $U$, clonal
 matrix $B$, and read count matrices are also provided in the `examples/` directory.
 
-## Usage Example
+### Example
 
-As an example, we will infer a phylogenetic tree from the simulated
+As an example, we infer a phylogenetic tree from the simulated
 data with $20$ samples and $10$ clones. To run `fastbe` on this data,
 execute:
 ```
@@ -153,3 +172,37 @@ fastbe search examples/sim_obs_frequency_matrix.txt -o examples/fastbe
 This command will output an adjacency list describing the clonal tree 
 at `examples/fastbe_tree.txt` and a `.json` file containing metadata
 at `examples/fastbe_results.json`.
+
+### Benchmarks
+
+The runtime of `fastbe` scales approximately linearly with the number 
+of samples and exponentially with the number of mutations. As a 
+reference, we provide the runtime of `fastbe` on the simulated data
+with $m = 100$ samples and a varying number of mutations $n$ with
+default parameters. The system used for benchmarking is an 
+Intel Core i7-8665U CPU @ 1.90GHz × 8 with 8GB of RAM. 
+
+| Mutations ($n$) | Samples ($m$) | Runtime (s) |
+|-----------------|---------------|-------------|
+| 10              | 100           | 4           |
+| 25              | 100           | 41          |
+| 50              | 100           | 148         |
+| 100             | 100           | 486         |
+| 200             | 100           | 923         |
+| 500             | 100           |             |
+| 1000            | 100           |             |
+
+The memory footprint of `fastbe` is $O(mn + nb)$ where $b$ is the
+beam width for almost all applications. The memory footprint of 
+`fastbe` is negligible for almost all applications.
+
+When running the `search` mode of `fastbe`, the beam width of the
+search algorithm can be specified with the `-b/--beam_width` flag.
+The beam width controls the number of candidate trees that are
+considered at each iteration of the search algorithm. The runtime
+of the search algorithm scales approximately linearly with the beam 
+width, and the quality of the inferred tree improves with increased 
+beam width. 
+
+[!TIP]
+Use the default beam width chosen by `fastbe` for most applications.

@@ -370,10 +370,8 @@ std::pair<digraph<clone_tree_vertex>, std::unordered_map<int, int>> beam_search(
         return one_fastbe(a, vertex_map, F, root) < one_fastbe(b, vertex_map, F, root);
     });
 
-    // print scores of partial trees
-    for (size_t t = 0; t < partial_trees.size(); ++t) {
-        spdlog::info("Tree {} objective is {}", t, one_fastbe(partial_trees[t], vertex_map, F, root));
-    }
+    spdlog::info("Best tree objective is {}", one_fastbe(partial_trees[0], vertex_map, F, root));
+    spdlog::info("Worst tree objective is {}", one_fastbe(partial_trees[partial_trees.size() - 1], vertex_map, F, root));
     
     return {partial_trees[0], vertex_map};
 }
@@ -484,13 +482,34 @@ void perform_search(const argparse::ArgumentParser &search) {
     auto root_it = std::find(clone_order.begin(), clone_order.end(), root);
     clone_order.erase(root_it);
     clone_order.insert(clone_order.begin(), root);
+    
+    int beam_width = search.get<int>("beam_width");
+    if (beam_width == -1) {
+        if (ncols <= 10) {
+            beam_width = 1000;
+        } else if (ncols <= 25) {
+            beam_width = 500;
+        } else if (ncols <= 50) {
+            beam_width = 250;
+        } else if (ncols <= 100) {
+            beam_width = 100;
+        } else if (ncols <= 200) {
+            beam_width = 25;
+        } else if (ncols <= 500) {
+            beam_width = 5;
+        } else {
+            beam_width = 1;
+        }
+
+        spdlog::info("Beam width not specified. Using default beam width of {} for {} clones.", beam_width, ncols);
+    }
 
     spdlog::info("Performing beam search to find tree(s)...");
     auto [clone_tree, vmap] = beam_search(
         frequency_matrix, 
         root, 
         clone_order, 
-        search.get<unsigned int>("beam_width"),
+        beam_width,
         num_threads
     );
 
@@ -572,8 +591,8 @@ int main(int argc, char *argv[])
 
     search.add_argument("-b", "--beam_width")
           .help("beam width")
-          .default_value(10U)
-          .scan<'u', unsigned int>();
+          .default_value(-1)
+          .scan<'d', int>();
 
     program.add_subparser(search);
     program.add_subparser(regress);
