@@ -60,6 +60,7 @@ The output binary will be located at `build/src/fastbe`.
 
 To run *fastbe*, simply execute the binary. 
 ```
+$ fastbe
 Usage: fastbe [--help] [--version] {regress,search}
 
 Optional arguments:
@@ -89,14 +90,14 @@ takes as input an $m \times n$ frequency matrix $F$ and an $n$-clonal
 tree $\mathcal{T}$ and outputs the minimum value of 
 $\lVert F - UB_{\mathcal{T}} \rVert_1$ over all usage matrices $U$.
 
-[!IMPORTANT] 
-The search command requires a root vertex specified with the 
-`-f/--assigned-root` flag, corresponding to the appropriate column of the 
-frequency matrix. By default this root vertex is set to be $0$, or the
-first column of the frequency matrix. When the root vertex is unknown,
-it suffices to append an extra column to the beginning of the frequency matrix 
-and specify the root as $0$. As best practice, keep the root vertex
-as the first column of the frequency matrix.
+> [!IMPORTANT] 
+> The search command requires a root vertex specified with the 
+> `-f/--assigned-root` flag, corresponding to the appropriate column of the 
+> frequency matrix. By default this root vertex is set to be $0$, or the
+> first column of the frequency matrix. When the root vertex is unknown,
+> it suffices to append an extra column to the beginning of the frequency matrix 
+> and specify the root as $0$. As best practice, keep the root vertex
+> as the first column of the frequency matrix.
 
 ### Input format
 
@@ -204,5 +205,5 @@ of the search algorithm scales approximately linearly with the beam
 width, and the quality of the inferred tree improves with increased 
 beam width. 
 
-[!TIP]
-Use the default beam width chosen by `fastbe` for most applications.
+> [!TIP]
+> Use the default beam width chosen by `fastbe` for most applications.
