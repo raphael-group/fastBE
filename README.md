@@ -192,8 +192,8 @@ Intel Core i7-8665U CPU @ 1.90GHz × 8 with 8GB of RAM.
 | 50              | 100           | 148         |
 | 100             | 100           | 486         |
 | 200             | 100           | 923         |
-| 500             | 100           |             |
-| 1000            | 100           |             |
+| 500             | 100           | 3161        |
+| 1000            | 100           | 4145        |
 
 The memory footprint of `fastbe` is $O(mn + nb)$ where $b$ is the
 beam width for almost all applications. The memory footprint of 
