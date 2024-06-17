@@ -422,9 +422,6 @@ std::vector<std::vector<float>> parse_frequency_matrix(const std::string& filena
 }
 
     
-/* HENRI TODO:  
- *  - Cleanup, move to seperate component,
- */
 enum class loss_type {L1, L2};
 
 float sum(const std::vector<std::vector<float>>& frequency_matrix, const std::vector<int>& columns, int i) {
@@ -460,7 +457,6 @@ float compute_component_score(
     const std::vector<int>& columns
 ) {
     int m = frequency_matrix.size();
-    int n = frequency_matrix[0].size();
 
     // compute optimal center
     std::vector<float> center(m, 0.0);
@@ -487,9 +483,8 @@ float compute_component_score(
 }
 
 /* 
- * Returns the connected components of an induced 
- * subgraph in  the clone tree when viewed as an 
- * undirected graph.
+ * Returns the connected components of an induced subgraph 
+ * in the clone tree when viewed as an undirected graph.
  */
 std::vector<std::vector<int>> connected_components(
     const digraph<int>& clone_tree,
@@ -528,17 +523,22 @@ std::vector<std::vector<int>> connected_components(
 
 /*
  * Given a clone tree $T$ and a frequency matrix $F$, this function,
- * and a parameter $k$, this function computes an optimal clustering
- * of the columns of the frequency matrix into $1, \ldots, k$ clusters.
+ * and a parameter $k$, this function computes clustering of the columns 
+ * of the frequency matrix into $1, \ldots, k$ clusters which is
+ * consistent with the clone tree $T$.
+ *
+ * The function is not guaranteed to return exactly $k$ clusters if
+ * optimal clustering is possible in with fewer clusters.
  */
-std::set<std::pair<float, std::vector<int>>> divisive_clustering(
+std::pair<std::vector<std::pair<float, std::vector<int>>>, std::vector<float>> divisive_clustering(
     loss_type loss,
     const std::vector<std::vector<float>>& frequency_matrix,
     digraph<int>& clone_tree,
-    int k
+    size_t k
 ) {
+    if (k == 0) return {{}, {}};
+
     std::set<std::pair<float, std::vector<int>>> clustering;
-    if (k == 0) return clustering;
 
     // create initial component consisting of all columns 
     std::vector<int> initial_component = clone_tree.nodes();
@@ -550,9 +550,16 @@ std::set<std::pair<float, std::vector<int>>> divisive_clustering(
     float initial_obj = compute_component_score(loss, frequency_matrix, initial_columns);
     clustering.insert({-initial_obj, initial_columns});
 
+    // in theory, can implement in O(mnk) time, this implementation is O(mn^2klog(n))
+    std::vector<float> obj_values(k, 0.000);
+    obj_values[0] = initial_obj;
     while(clustering.size() < k) {
-        auto [obj, component] = *clustering.begin();
+        spdlog::info("Objective value with {} clusters: {}", clustering.size(), obj_values[clustering.size() - 1]);
 
+        auto [obj, component] = *clustering.begin();
+        if (component.size() == 1) break;
+
+        // TODO: a little slow, make component a set
         std::vector<std::pair<int, int>> component_edges;
         for (auto edge : clone_tree.edges()) {
             if (std::find(component.begin(), component.end(), edge.first) != component.end() &&
@@ -561,6 +568,13 @@ std::set<std::pair<float, std::vector<int>>> divisive_clustering(
             }
         }
 
+        // TODO: can improve by not recomputing objective
+        // for each split. instead, walk through tree maintaining
+        // the current objective and the current split and update 
+        // it as we go in O(1) time using median/mean update formulas.
+        //
+        // this will allow us to find the best split in O(n) time. though
+        // arguably, this is simpler.
         float min_obj1 = std::numeric_limits<float>::max();
         float min_obj2 = std::numeric_limits<float>::max();
         float min_obj  = std::numeric_limits<float>::max();
@@ -599,14 +613,24 @@ std::set<std::pair<float, std::vector<int>>> divisive_clustering(
         clustering.erase(clustering.begin());
         clustering.insert({-min_obj1, sub_component1});
         clustering.insert({-min_obj2, sub_component2});
+
+        // update list of objective values
+        float current_obj = 0;
+        for (auto [obj, component] : clustering) {
+            current_obj += obj;
+        }
+
+        obj_values[clustering.size() - 1] = -current_obj;
     }
 
+    spdlog::info("Objective value with {} clusters: {}", clustering.size(), obj_values[clustering.size() - 1]);
+
+    std::vector<std::pair<float, std::vector<int>>> new_clustering;
     for (auto [obj, component] : clustering) {
-        clustering.erase({obj, component});
-        clustering.insert({-obj, component});
+        new_clustering.push_back({-obj, component});
     }
 
-    return clustering;
+    return {new_clustering, obj_values};
 }
 
 void perform_cluster(const argparse::ArgumentParser &cluster) {
@@ -617,21 +641,33 @@ void perform_cluster(const argparse::ArgumentParser &cluster) {
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    auto clustering = divisive_clustering(
+    spdlog::info("Performing divisive clustering...");
+    auto [clustering, obj_values] = divisive_clustering(
         loss_type::L1, 
         frequency_matrix, 
         clone_tree_int, 
         num_clusters
     );
 
-    for (auto [obj, component] : clustering) {
-        spdlog::info("Cluster with objective value: {}", obj);
-        for (auto col : component) {
-            spdlog::info("{}", clone_tree_int[col].data);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+
+    std::ofstream adj_output(cluster.get<std::string>("output") + "_clustering.csv");
+    adj_output << "mutation,clone" << std::endl;
+    for (size_t i = 0; i < clustering.size(); ++i) {
+        for (auto vert : clustering[i].second) {
+            adj_output << clone_tree_int[vert].data << "," << i << std::endl;
         }
     }
-       
-    auto end = std::chrono::high_resolution_clock::now();
+
+    json res;
+    res["time (ns)"] = duration.count();
+    res["time (s)"]  = duration.count() / 1e9;
+    res["num_clusters"] = clustering.size();
+    res["objective_values"] = obj_values;
+
+    std::ofstream json_output_stats(cluster.get<std::string>("output") + "_clustering_results.json");
+    json_output_stats << res.dump(4) << std::endl;
 }
 
 void perform_regression(const argparse::ArgumentParser &regress) {
