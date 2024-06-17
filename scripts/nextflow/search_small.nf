@@ -18,11 +18,11 @@ params.citup_qip = "/n/fs/ragr-data/users/schmidt/miniconda3/envs/citupenv/bin/r
 params.citup_input_script = "${params.proj_dir}/scripts/processing/make_citup_input.py"
 params.citup_parse_output = "${params.proj_dir}/scripts/processing/parse_citup_output.py"
 
-params.nmutations = [200]
+params.nmutations = [500]
 params.nclones    = [3, 5, 10, 20, 30, 50]
-params.nsamples   = [5, 10, 25, 50, 100]
-params.seeds      = [0, 1, 2, 3, 4]
-params.coverage   = [100]
+params.nsamples   = [5, 10, 25, 50]
+params.seeds      = [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12]
+params.coverage   = [40]
 
 process create_sim {
     cpus 1
@@ -39,7 +39,7 @@ process create_sim {
               val(clones), val("m${mutations}_n${clones}_s${samples}_c${coverage}_r${seed}")
 
     """
-    python '${params.sim_script}' --mutations ${mutations} --samples ${samples} --clones ${clones} --coverage ${coverage} --seed ${seed} --output sim
+    python '${params.sim_script}' --mutations ${clones} --samples ${samples} --clones ${clones} --coverage ${coverage} --seed ${seed} --output sim
     """
 }
 
@@ -57,8 +57,7 @@ process allele_minima {
         tuple file("inferred_tree.txt"), file("inferred_results.json"), file("timing.txt"), val(id)
 
     """
-    /usr/bin/time -v '${params.allele_minima}' search ${freq_matrix} -a 1 -s 16 --algorithm simulated_annealing \
-                  --output inferred -t ${task.cpus} --max_iterations 500000 --initial_probability 0.1 2>> timing.txt
+    /usr/bin/time -v '${params.allele_minima}' search ${freq_matrix} --output inferred -t ${task.cpus} -b 10 2>> timing.txt
     """
 }
 
@@ -135,7 +134,7 @@ process orchard {
     cpus 16
     memory '8 GB'
     time '24h'
-    // errorStrategy 'ignore'
+    errorStrategy 'ignore'
 
     input:
         tuple file(ssm), file(params_json), val(id)
@@ -163,8 +162,8 @@ process calder {
         tuple file("tree.txt"), val(id)
 
     """
-    export LD_LIBRARY_PATH=/n/fs/ragr-research/projects/fastBE/dependencies/calder/glpk-4.65/lib/jni 
-    java -jar '${params.calder_jar}' -i ${input_tsv} -o . -v glpk -N
+    export LD_LIBRARY_PATH=/n/fs/ragr-research/projects/fastBE/dependencies/calder/glpk-4.65/lib/jni:/n/fs/ragr-research/projects/fastBE/dependencies/calder/glpk-4.65/lib
+    java -jar '${params.calder_jar}' -i ${input_tsv} -o . -v glpk -N --alpha 0.99999999 -n
     python '${params.calder_parse_output}' calder_tree1.dot > tree.txt
     """
 }
@@ -186,6 +185,11 @@ process citup {
     '${params.citup_qip}' ${freq_matrix} ${clustering} citup_results.hdf --loglevel INFO --maxjobs 16 --min_nodes ${clones} --max_nodes ${clones} --submit local
     '${params.citup_python}' '${params.citup_parse_output}' citup_results.hdf > tree.txt
     """
+}
+
+def outputExists(method, id, suffix) {
+    outputFile = "${params.outputDir}/${method}/${id}_${suffix}"
+    return file(outputFile).exists()
 }
 
 workflow {
@@ -227,38 +231,42 @@ workflow {
 
     // filter {5 < it[it.size() - 2] && it[it.size() - 2] <= 10}
     // run CITUP
-    // simulation  | create_citup_input | citup | map { tree, id ->
-        // outputPrefix = "${params.outputDir}/citup/${id}"
-        // tree.moveTo("${outputPrefix}_inferred_tree.txt")
-    // }
+    simulation  | filter {it[it.size() - 2] <= 10} 
+                | filter { !outputExists("citup", it[it.size() - 1], "inferred_tree.txt") } 
+                | create_citup_input | citup | map { tree, id ->
+        outputPrefix = "${params.outputDir}/citup/${id}"
+        tree.moveTo("${outputPrefix}_inferred_tree.txt")
+    }
 
     // run CALDER
-    // simulation | create_calder_input | calder | map { tree, id ->
-        // outputPrefix = "${params.outputDir}/calder/${id}"
-        // tree.moveTo("${outputPrefix}_inferred_tree.txt")
-    // }
+    simulation | filter {it[it.size() - 2] <= 10} 
+               | filter { !outputExists("calder", it[it.size() - 1], "inferred_tree.txt") } 
+               | create_calder_input | calder | map { tree, id ->
+        outputPrefix = "${params.outputDir}/calder/${id}"
+        tree.moveTo("${outputPrefix}_inferred_tree.txt")
+    }
 
     // run AlleleMinima
-    // simulation | allele_minima | map { inferred_tree, inferred_results, timing, id ->
-        // outputPrefix = "${params.outputDir}/allele_minima/${id}"
-        // inferred_tree.moveTo("${outputPrefix}_inferred_tree.txt")
-        // inferred_results.moveTo("${outputPrefix}_inferred_results.json")
-        // timing.moveTo("${outputPrefix}_timing.txt")
-    // }
+    simulation | filter { !outputExists("allele_minima", it[it.size() - 1], "inferred_tree.txt") } | allele_minima | map { inferred_tree, inferred_results, timing, id ->
+        outputPrefix = "${params.outputDir}/allele_minima/${id}"
+        inferred_tree.moveTo("${outputPrefix}_inferred_tree.txt")
+        inferred_results.moveTo("${outputPrefix}_inferred_results.json")
+        timing.moveTo("${outputPrefix}_timing.txt")
+    }
 
     // create input for pairtree AND orchard
     pt_orchard = simulation | create_pairtree_input
 
     // run Pairtree
-    // pt_orchard | pairtree | map { results, best_tree, timing, id ->
-        // outputPrefix = "${params.outputDir}/pairtree/${id}"
-        // results.moveTo("${outputPrefix}_results.npz")
-        // best_tree.moveTo("${outputPrefix}_best_tree.txt")
-        // timing.moveTo("${outputPrefix}_timing.txt")
-    // }
+    pt_orchard | filter { !outputExists("pairtree", it[it.size() - 1], "best_tree.txt") } | pairtree | map { results, best_tree, timing, id ->
+        outputPrefix = "${params.outputDir}/pairtree/${id}"
+        results.moveTo("${outputPrefix}_results.npz")
+        best_tree.moveTo("${outputPrefix}_best_tree.txt")
+        timing.moveTo("${outputPrefix}_timing.txt")
+    }
 
     // run Orchard
-    pt_orchard | orchard | map { results, best_tree, timing, id ->
+    pt_orchard | filter { !outputExists("orchard", it[it.size() - 1], "best_tree.txt") } | orchard | map { results, best_tree, timing, id ->
         outputPrefix = "${params.outputDir}/orchard/${id}"
         results.moveTo("${outputPrefix}_results.npz")
         best_tree.moveTo("${outputPrefix}_best_tree.txt")

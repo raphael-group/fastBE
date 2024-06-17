@@ -1,7 +1,7 @@
-params.proj_dir      = "/n/fs/ragr-research/projects/vafpp"
+params.proj_dir      = "/n/fs/ragr-research/projects/fastBE/"
 params.sim_script    = "${params.proj_dir}/scripts/simulation.py"
-params.python_script = "${params.proj_dir}/scripts/vafpp_lp.py"
-params.cpp_command   = "${params.proj_dir}/build/src/vafpp"
+params.python_script = "${params.proj_dir}/scripts/regression_lp.py"
+params.cpp_command   = "${params.proj_dir}/build/src/fastbe"
 
 params.nmutations = [500, 1000, 2000, 4000]
 params.nclones    = [250, 500, 750, 1000]
@@ -31,7 +31,7 @@ process regress_python {
     cpus 4
     memory '32 GB'
     time '59m'
-    errorStrategy 'ignore'
+    // errorStrategy 'ignore'
 
     input:
         tuple path(clonal_matrix), path(mut_clone_mapping), path(freq_matrix), path(total_matrix),
@@ -49,7 +49,7 @@ process regress_python {
 process regress_cpp {
     cpus 1
     memory '2 GB'
-    time '59m'
+    time '8h'
 
     input:
         tuple path(clonal_matrix), path(mut_clone_mapping), path(freq_matrix), path(total_matrix),
@@ -76,13 +76,13 @@ workflow {
 
     simulation =  parameter_channel | create_sim 
     cpp_res = simulation | regress_cpp
-    py_res  = simulation | regress_python
+    // py_res  = simulation | regress_python
 
     cpp_res | map { result, name ->
       result.moveTo("nextflow_results/timings/${name}_cpp_results.json")
     }
 
-    py_res | map { result, name ->
-      result.moveTo("nextflow_results/timings/${name}_python_results.json")
-    }
+    // py_res | map { result, name ->
+      // result.moveTo("nextflow_results/timings/${name}_python_results.json")
+    // }
 }

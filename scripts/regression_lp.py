@@ -180,6 +180,19 @@ def one_vafpp_dp(tree, F):
         
     return -1 * obj
 
+def compute_sum_condition_violation(tree, frequency_matrix):
+    m, n = frequency_matrix.shape
+    violation = np.zeros(m)
+    for i in range(m):
+        for j in range(n):
+            child_sum = 0
+            for k in tree[j]:
+                child_sum += frequency_matrix[i,k]
+                
+            # print(f"i: {i}, j: {j}, child_sum: {child_sum}, frequency_matrix[i, j]: {frequency_matrix[i, j]}")
+            violation[i] += max(0, child_sum - frequency_matrix[i, j])
+    return violation
+
 if __name__ == '__main__':
     args = parse_args()
 
@@ -223,6 +236,10 @@ if __name__ == '__main__':
     results["cplex_lp_time_with_building"] = end - start
     results["cplex_lp_time_without_building"] = cplex_time
     results["cplex_lp_obj"] = obj4
+
+    if args.tree:
+        violation = compute_sum_condition_violation(tree, F)
+        results["sum_condition_violation"] = violation.tolist()
 
     with open(f"{args.output}_results.json", 'w') as f:
         json.dump(results, f, indent=4)

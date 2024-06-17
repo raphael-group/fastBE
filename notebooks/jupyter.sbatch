@@ -30,7 +30,7 @@ localhost:${port}  (prefix w/ https:// if using password)
 module load gurobi
 source /n/fs/ragr-data/users/schmidt/miniconda3/bin/activate base
 conda activate breaked
-cd /n/fs/ragr-research/projects/vafpp/
+cd /n/fs/ragr-research/projects/fastBE/
 
 # use one of the below two lines depending on what you want to run
 # jupyter lab --no-browser --port=${port} --ip=${node}

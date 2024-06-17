@@ -7,10 +7,11 @@ params.allele_minima = "${params.proj_dir}/build/src/fastbe"
 params.pairtree_input_script = "${params.proj_dir}/scripts/processing/make_pairtree_input.py"
 params.pairtree_parse_output = "${params.proj_dir}/scripts/processing/parse_pairtree_output.py"
 params.pairtree_bin  = "${params.proj_dir}/dependencies/pairtree/bin/pairtree"
+params.orchard_bin   = "${params.proj_dir}/dependencies/orchard/bin/orchard"
 
 params.nmutations = [4000]
 params.nclones    = [100, 250, 500, 1000]
-params.nsamples   = [50, 100, 200, 400]
+params.nsamples   = [50, 100]
 params.seeds      = [0, 1, 2, 3, 4, 5]
 params.coverage   = [100]
 
@@ -34,7 +35,7 @@ process create_sim {
 }
 
 process allele_minima {
-    cpus 16
+    cpus 32
     memory '4 GB'
     time '48h'
     errorStrategy 'ignore'
@@ -47,8 +48,7 @@ process allele_minima {
         tuple file("inferred_tree.txt"), file("inferred_results.json"), file("timing.txt"), val(id)
 
     """
-    /usr/bin/time -v '${params.allele_minima}' search ${freq_matrix} -a 1 -s 16 --algorithm simulated_annealing \
-                  --output inferred -t ${task.cpus} --max_iterations 1500000 --initial_probability 0.1 2>> timing.txt
+    /usr/bin/time -v '${params.allele_minima}' search ${freq_matrix} --output inferred -t ${task.cpus} -b 1 2>> timing.txt
     """
 }
 
@@ -56,6 +56,7 @@ process create_pairtree_input {
     cpus 1
     memory '1 GB'
     time '10m'
+    errorStrategy 'ignore'
 
     input:
         tuple path(clonal_matrix), path(mut_clone_mapping), path(freq_matrix), path(total_matrix),
@@ -85,6 +86,29 @@ process pairtree {
     /usr/bin/time -v '${params.pairtree_bin}' --parallel 16 --params ${params_json} ${ssm} results.npz 2>> timing.txt
     python '${params.pairtree_parse_output}' results.npz --output best_tree.txt     
     """
+}
+
+process orchard {
+    cpus 32
+    memory '8 GB'
+    time '48h'
+    // errorStrategy 'ignore'
+
+    input:
+        tuple file(ssm), file(params_json), val(id)
+
+    output:
+        tuple file("results.npz"), file("best_tree.txt"), file("timing.txt"), val(id)
+
+    """
+    /usr/bin/time -v python '${params.orchard_bin}' ${ssm} ${params_json} -k 1 -f 20 -n 32 results.npz 2>> timing.txt
+    python '${params.pairtree_parse_output}' results.npz --output best_tree.txt     
+    """
+}
+
+def outputExists(method, id, suffix) {
+    outputFile = "${params.outputDir}/${method}/${id}_${suffix}"
+    return file(outputFile).exists()
 }
 
 workflow {
@@ -129,11 +153,22 @@ workflow {
         timing.moveTo("${outputPrefix}_timing.txt")
     }
 
+    // create input for pairtree AND orchard
+    // pt_orchard = simulation | create_pairtree_input
+
     // run Pairtree
-    simulation | create_pairtree_input | pairtree | map { results, best_tree, timing, id ->
-        outputPrefix = "${params.outputDir}/pairtree/${id}"
-        results.moveTo("${outputPrefix}_results.npz")
-        best_tree.moveTo("${outputPrefix}_best_tree.txt")
-        timing.moveTo("${outputPrefix}_timing.txt")
-    }
+    // pt_orchard | filter { !outputExists("pairtree", it[it.size() - 1], "best_tree.txt") } |pairtree | map { results, best_tree, timing, id ->
+        // outputPrefix = "${params.outputDir}/pairtree/${id}"
+        // results.moveTo("${outputPrefix}_results.npz")
+        // best_tree.moveTo("${outputPrefix}_best_tree.txt")
+        // timing.moveTo("${outputPrefix}_timing.txt")
+    // }
+
+    // run Orchard
+    // pt_orchard | filter { !outputExists("orchard", it[it.size() - 1], "best_tree.txt") } | orchard | map { results, best_tree, timing, id ->
+        // outputPrefix = "${params.outputDir}/orchard/${id}"
+        // results.moveTo("${outputPrefix}_results.npz")
+        // best_tree.moveTo("${outputPrefix}_best_tree.txt")
+        // timing.moveTo("${outputPrefix}_timing.txt")
+    // }
 }
