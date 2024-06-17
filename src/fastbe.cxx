@@ -639,11 +639,17 @@ void perform_cluster(const argparse::ArgumentParser &cluster) {
     auto [clone_tree_int, vertex_map] = parse_adjacency_list(cluster.get<std::string>("clone_tree"));
     std::vector<std::vector<float>> frequency_matrix = parse_frequency_matrix(cluster.get<std::string>("frequency_matrix"));
 
-    auto start = std::chrono::high_resolution_clock::now();
+    loss_type loss = loss_type::L1;
+    if (cluster.get<std::string>("loss") == "L2") {
+        loss = loss_type::L2;
+    } else if (cluster.get<std::string>("loss") != "L1") {
+        throw std::runtime_error("Invalid loss function specified.");
+    }
 
+    auto start = std::chrono::high_resolution_clock::now();
     spdlog::info("Performing divisive clustering...");
     auto [clustering, obj_values] = divisive_clustering(
-        loss_type::L1, 
+        loss,
         frequency_matrix, 
         clone_tree_int, 
         num_clusters
@@ -665,6 +671,7 @@ void perform_cluster(const argparse::ArgumentParser &cluster) {
     res["time (s)"]  = duration.count() / 1e9;
     res["num_clusters"] = clustering.size();
     res["objective_values"] = obj_values;
+    res["loss_function"] = loss == loss_type::L1 ? "L1" : "L2";
 
     std::ofstream json_output_stats(cluster.get<std::string>("output") + "_clustering_results.json");
     json_output_stats << res.dump(4) << std::endl;
@@ -862,6 +869,11 @@ int main(int argc, char *argv[])
     cluster.add_argument("-o", "--output")
            .help("prefix of the output files")
            .required();
+
+    cluster.add_argument("-l", "--loss")
+           .help("loss function to use for clustering")
+           .default_value("L1")
+           .choices("L1", "L2");
 
     program.add_subparser(search);
     program.add_subparser(regress);
