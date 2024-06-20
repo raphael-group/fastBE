@@ -2,13 +2,24 @@ params.proj_dir      = "/n/fs/ragr-research/projects/fastBE"
 params.outputDir     = "/n/fs/ragr-research/projects/fastBE/nextflow_results/clustering/"
 params.sim_script    = "${params.proj_dir}/scripts/simulation.py"
 
-params.pyclonevi = "/n/fs/ragr-data/users/schmidt/miniconda3/envs/pyclone-vi/bin/pyclone-vi"
-params.fastbe = "${params.proj_dir}/build/src/fastbe"
+params.pairtree_input_script = "${params.proj_dir}/scripts/processing/make_pairtree_input.py"
+params.parse_orchard_output  = "${params.proj_dir}/scripts/processing/parse_orchard_cluster.py"
 
-params.nmutations = [100]//, 250, 500]
-params.nclones    = [5, 10, 20]
-params.nsamples   = [3, 5, 10, 20]
-params.seeds      = [0, 1, 2, 3, 4, 5]
+params.pyclonevi   = "/n/fs/ragr-data/users/schmidt/miniconda3/envs/pyclone-vi/bin/pyclone-vi"
+params.orchard_bin = "${params.proj_dir}/dependencies/orchard/bin/orchard"
+params.orchard     = "${params.proj_dir}/dependencies/orchard/"
+params.fastbe      = "${params.proj_dir}/build/src/fastbe"
+
+// params.nmutations = [100, 250, 500]
+// params.nclones    = [5, 10, 20]
+// params.nsamples   = [3, 5, 10, 20]
+// params.seeds      = [0, 1, 2, 3, 4, 5]
+// params.coverage   = [20]
+
+params.nmutations = [100]
+params.nclones    = [5]
+params.nsamples   = [10]
+params.seeds      = [0]
 params.coverage   = [20]
 
 process create_sim {
@@ -31,6 +42,24 @@ process create_sim {
     """
     python '${params.sim_script}' --mutations ${mutations} --samples ${samples} --clones ${clones} --coverage ${coverage} --seed ${seed} --output sim
     """
+}
+
+process create_orchard_input { 
+    cpus 1
+    memory '1 GB'
+    time '10m'
+    errorStrategy 'ignore'
+
+    input:
+        tuple path(clonal_matrix), path(mut_clone_mapping), path(collapsed_freq_matrix), path(freq_matrix), 
+              path(total_matrix), path(clone_tree), path(usage_matrix), path(variant_matrix), val(clones), val(id)
+
+    output:
+        tuple file("orchard_mutations.ssm"), file("orchard_params.json"), val(clones), val(id)
+
+    """
+    python '${params.pairtree_input_script}' --full ${variant_matrix} ${total_matrix} ${mut_clone_mapping} -n $clones -o orchard
+    """ 
 }
 
 process fastbe {
@@ -56,6 +85,28 @@ process fastbe {
     """
 }
 
+process orchard {
+    cpus 32
+    memory '8 GB'
+    time '48h'
+
+    publishDir "${params.outputDir}/orchard/${id}", mode: 'copy', overwrite: true
+
+    input:
+        tuple file(ssm), file(params_json), val(clones), val(id)
+
+    output:
+        tuple file("inferred_clustering.csv"), file("clusters.npz"), val(id)
+
+    """
+    python '${params.orchard_bin}' ${ssm} ${params_json} -k 1 -f 20 -n 32 results.npz 
+    python '${params.orchard}'/metrics/neutree/convert_outputs.py results.npz results.neutree.npz
+    python '${params.orchard}'/bin/phylogeny_aware_clustering ${ssm} ${params_json} results.neutree.npz cluster
+    mv cluster/clusters.npz clusters.npz
+    python '${params.parse_orchard_output}' clusters.npz -k ${clones} > inferred_clustering.csv
+    """
+}
+
 process pyclonevi {
     cpus 16
     memory '4 GB'
@@ -68,13 +119,13 @@ process pyclonevi {
               path(clone_tree), path(usage_matrix), path(variant_matrix), val(clones), val(id)
 
     output:
-        tuple file("pyclonevi_input.tsv"), file("results.tsv"), file("results.csv"), file("timing.txt")
+        tuple file("pyclonevi_input.tsv"), file("results.tsv"), file("inferred_clustering.csv"), file("timing.txt")
 
     """
     python '${params.proj_dir}/scripts/processing/make_pyclonevi_input.py' -v ${variant_matrix} -t ${total_matrix} > pyclonevi_input.tsv
     /usr/bin/time -v '${params.pyclonevi}' fit -i pyclonevi_input.tsv -o output.h5 -c ${clones} 2>> timing.txt
     /usr/bin/time -v '${params.pyclonevi}' write-results-file -i output.h5 -o results.tsv
-    python '${params.proj_dir}/scripts/processing/parse_pyclonevi_results.py' results.tsv > results.csv
+    python '${params.proj_dir}/scripts/processing/parse_pyclonevi_results.py' results.tsv > inferred_clustering.csv
     """
 }
 
@@ -86,5 +137,7 @@ workflow {
                                .combine(channel.fromList(params.seeds))
 
     simulation = parameter_channel | create_sim 
-    simulation | pyclonevi 
+    // simulation | pyclonevi 
+    // simulation | fastbe 
+    simulation | create_orchard_input | orchard
 }
