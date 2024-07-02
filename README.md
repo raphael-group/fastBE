@@ -178,8 +178,8 @@ at `examples/fastbe_results.json`.
 
 ### Benchmarks
 
-The runtime of `fastbe` scales approximately linearly with the number 
-of samples and exponentially with the number of mutations. As a 
+The runtime of `fastbe` scales as $\mathcal{O}(m)$ with the number 
+$m$ of samples and as $\mathcal{O}(n^4\log^2(n))$ with the number $n$ of mutations. As a 
 reference, we provide the runtime of `fastbe` on the simulated data
 with $m = 100$ samples and a varying number of mutations $n$ with
 default parameters. The system used for benchmarking is an 
