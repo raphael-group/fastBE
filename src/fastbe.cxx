@@ -10,6 +10,7 @@
 #include <fastbe.hpp>
 #include <digraph.hpp>
 #include <piecewiselinearf.hpp>
+#include <piecewisequadraticf.hpp>
 
 #include <cmath>
 #include <unordered_map>
@@ -53,11 +54,25 @@ struct clone_tree_vertex {
     clone_tree_vertex() : id(-1), valid(false) {}
 };
 
+struct clone_tree_vertex_l2 {
+    int id;
+    bool valid;
+    std::vector<float> w;
+    std::vector<PiecewiseQuadraticF> fs;
+
+    clone_tree_vertex_l2(size_t nrows, int id) : id(id), valid(false) {
+        w = std::vector<float>(nrows, 0.0);
+        fs = std::vector<PiecewiseQuadraticF>(nrows, PiecewiseQuadraticF());
+    }
+
+    clone_tree_vertex_l2() : id(-1), valid(false) {}
+};
+
 /*
  * Converts a clone tree with integer vertex labels to a clone tree
  * with clone_tree_vertex vertex labels.
  *
- * To be used to avoid recomputation when calling `one_fastbe` multiple 
+ * To be used to avoid recomputation when calling `one_fastbe_l1` multiple 
  * times with perturbations of the same clone tree.
  */
 digraph<clone_tree_vertex> convert_clone_tree(const digraph<int>& clone_tree, size_t nrows) {
@@ -76,33 +91,6 @@ digraph<clone_tree_vertex> convert_clone_tree(const digraph<int>& clone_tree, si
 }
 
 /*
- * Prunes the subtree rooted at vertex u and regrafts as a child of 
- * vertex v. This function assumes that u is not the root of the tree.
- */
-void subtree_prune_and_regraft(digraph<clone_tree_vertex>& tree, int u, int v, int root) {
-    int parent = *tree.predecessors(u).begin();
-    tree.remove_edge(parent, u);
-    tree.add_edge(v, u);
-
-    std::stack<int> s;
-    s.push(u);
-    s.push(parent);
-
-    // walk from vertices u and v to root and update valid flags
-    while (!s.empty()) {
-        int node_id = s.top();
-        s.pop();
-
-        tree[node_id].data.valid = false;
-
-        if (node_id == root) continue;
-
-        int parent = *tree.predecessors(node_id).begin();
-        s.push(parent);
-    }
-}
-
-/*
  * Invalidates all vertices on the path from u to root.
  */ 
 void invalidate(digraph<clone_tree_vertex>& tree, int u, int root) {
@@ -113,6 +101,84 @@ void invalidate(digraph<clone_tree_vertex>& tree, int u, int root) {
     int parent = *tree.predecessors(u).begin();
     invalidate(tree, parent, root);
 }
+
+/*
+ * Given a frequency matrix $F$ and a clone tree $T$, this function
+ * finds the minimizing value of $$\sum_{i=1}^m\lVert F_i - (UB)_i \rVert_2^2$$ 
+ * over all usage matrices in $\mathcal{O}(mn^2)$ using dynamic programming.
+ *
+ * This function avoids recomputation, by only updating the 
+ * piecewise linear functions of the clone tree at vertices 
+ * whose subtrees have been modified, as specified by the 
+ * `valid` flag in the `clone_tree_vertex` struct.
+ *
+ * Input: 
+ *  - clone_tree: A clone tree represented as a digraph.
+ *  - vertex_map: A map from the columns of the frequency matrix to the 
+ *    vertices of the clone tree.
+ *  - F: A frequency matrix represented as a 2D vector.
+*/
+/*
+float one_fastbe_l2(
+    digraph<clone_tree_vertex_l2>& clone_tree, 
+    const std::unordered_map<int, int>& vertex_map, 
+    const std::vector<std::vector<float>>& F, 
+    int root
+) {
+    size_t nrows = F.size();
+
+    std::stack<int> call_stack; // contains vertices to visit in column coordinates
+    call_stack.push(root);
+    while(!call_stack.empty()) {
+        int i = call_stack.top();
+        call_stack.pop();
+
+        if (clone_tree[vertex_map.at(i)].data.valid) continue;
+
+        // If leaf, set piecewise linear function and return.
+        if (clone_tree.out_degree(vertex_map.at(i)) == 0) {
+            for (size_t j = 0; j < nrows; ++j) {
+                clone_tree[vertex_map.at(i)].data.fs[j] = PiecewiseQuadraticF(F[j][i]);
+            }
+
+            clone_tree[vertex_map.at(i)].data.valid = true;
+            continue;
+        }
+
+        // Recurse at children. 
+        bool all_children_valid = true; 
+        for (auto k : clone_tree.successors(vertex_map.at(i))) {
+            if (!clone_tree[k].data.valid) {
+                if (all_children_valid) {
+                    call_stack.push(i);
+                }
+
+                call_stack.push(clone_tree[k].data.id);
+                all_children_valid = false;
+            }
+        }
+
+        if (!all_children_valid) continue;
+
+        for (size_t j = 0; j < nrows; ++j) {
+            for (auto k : clone_tree.successors(vertex_map.at(i))) {
+
+            }
+
+            // compute representation of parent using representation of children
+            clone_tree[vertex_map.at(i)].data.fs[j] = 
+        }
+
+        clone_tree[vertex_map.at(i)].data.valid = true;
+    }
+
+    float obj = 0;
+    for (size_t j = 0; j < nrows; ++j) {
+    }
+
+    return -1 * obj;
+}
+*/
 
 /*
  * Given a frequency matrix $F$ and a clone tree $T$, this function
@@ -130,7 +196,7 @@ void invalidate(digraph<clone_tree_vertex>& tree, int u, int root) {
  *    vertices of the clone tree.
  *  - F: A frequency matrix represented as a 2D vector.
 */
-float one_fastbe(
+float one_fastbe_l1(
     digraph<clone_tree_vertex>& clone_tree, 
     const std::unordered_map<int, int>& vertex_map, 
     const std::vector<std::vector<float>>& F, 
@@ -206,36 +272,6 @@ float one_fastbe(
     return -1 * obj;
 }
 
-/*
- * Computes the matrix for the total violation of the sum condition 
- * to the frequency matrix $F$ and the clone tree $T$. In particular,
- *    $$A[i, j] = \sum_{k\in C(j)} F_{i,k}$$
- * which allows us to compute (and update) the total violation of the
- * sum condition in $\mathcal{O}(nm)$ time.
- */
-template <typename T>
-std::vector<std::vector<float>> compute_sum_violation_matrix(
-    const digraph<T>& clone_tree, const std::unordered_map<int, int>& vertex_map, 
-    const std::vector<std::vector<float>>& F_transpose
-) {
-    size_t nrows = F_transpose.size();
-    size_t ncols = F_transpose[0].size();
-
-    std::vector<std::vector<float>> A(nrows, std::vector<float>(ncols, 0.0));
-
-    for (size_t j = 0; j < nrows; ++j) {
-        for (size_t i = 0; i < ncols; ++i) {
-            float A_ji = 0;
-            for (auto k : clone_tree.successors(vertex_map.at(j))) {
-                A_ji += F_transpose[clone_tree[k].data.id][i];
-            }
-            A[j][i] = A_ji;
-        }
-    }
-
-    return A;
-}
-
 /* 
  * Computes the score of all 2^{|child(v)|} ways to place vertex u 
  * as a child of vertex v when allowing the children of v to be 
@@ -269,7 +305,7 @@ std::vector<std::pair<float, long long>> score_placements(
         }
 
         invalidate(partial_tree, u, root_index);
-        float score = one_fastbe(partial_tree, vertex_map, F, root);
+        float score = one_fastbe_l1(partial_tree, vertex_map, F, root);
         placements.push_back({score, i});
     }
 
@@ -366,11 +402,11 @@ std::pair<digraph<clone_tree_vertex>, std::unordered_map<int, int>> forward_beam
     }
 
     std::sort(partial_trees.begin(), partial_trees.end(), [&](auto& a, auto& b) {
-        return one_fastbe(a, vertex_map, F, root) < one_fastbe(b, vertex_map, F, root);
+        return one_fastbe_l1(a, vertex_map, F, root) < one_fastbe_l1(b, vertex_map, F, root);
     });
 
-    spdlog::info("Best tree objective is {}", one_fastbe(partial_trees[0], vertex_map, F, root));
-    spdlog::info("Worst tree objective is {}", one_fastbe(partial_trees[partial_trees.size() - 1], vertex_map, F, root));
+    spdlog::info("Best tree objective is {}", one_fastbe_l1(partial_trees[0], vertex_map, F, root));
+    spdlog::info("Worst tree objective is {}", one_fastbe_l1(partial_trees[partial_trees.size() - 1], vertex_map, F, root));
     
     return {partial_trees[0], vertex_map};
 }
@@ -684,14 +720,14 @@ void perform_regression(const argparse::ArgumentParser &regress) {
 
     int root = regress.get<int>("assigned_root");
     auto start = std::chrono::high_resolution_clock::now();
-    float obj = one_fastbe(clone_tree, vertex_map, frequency_matrix, root);
+    float obj = one_fastbe_l1(clone_tree, vertex_map, frequency_matrix, root);
 
     for (size_t i = 0; i < regress.get<size_t>("num_reps") - 1; ++i) {
         for (auto vertex : clone_tree.nodes()) {
             clone_tree[vertex].data.valid = false;
         }
 
-        one_fastbe(clone_tree, vertex_map, frequency_matrix, root);
+        one_fastbe_l1(clone_tree, vertex_map, frequency_matrix, root);
     }
 
     auto end = std::chrono::high_resolution_clock::now();
@@ -768,7 +804,7 @@ void perform_search(const argparse::ArgumentParser &search) {
         num_threads
     );
 
-    float obj = one_fastbe(clone_tree, vmap, frequency_matrix, root);
+    float obj = one_fastbe_l1(clone_tree, vmap, frequency_matrix, root);
     spdlog::info("Objective value: {}", obj);
 
     std::string adjacency_list = to_adjacency_list(clone_tree, vmap);
@@ -786,6 +822,8 @@ void perform_search(const argparse::ArgumentParser &search) {
 
 int main(int argc, char *argv[])
 {
+    test_piecewisequadraticf();
+
     auto console_logger = spdlog::stdout_color_mt("fastbe");
     spdlog::set_default_logger(console_logger);
 
