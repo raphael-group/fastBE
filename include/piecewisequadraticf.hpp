@@ -14,7 +14,11 @@ public:
     std::vector<double> slopes;      // m_1 <= ... <= m_k
     std::vector<double> breakpoints; // b_1 <= ... <= b_k
 
-    PiecewiseQuadraticF() {}
+    PiecewiseQuadraticF() {
+        f0 = 0.0;
+        c0 = 0.0;
+        m0 = 0.0;
+    }
 
     // leaf constructor
     PiecewiseQuadraticF(double frequency) {
@@ -77,14 +81,19 @@ public:
         return result;
     }
 
-    // runs in O(k) time
-    double operator()(double x) const {
+    std::vector<double> get_derivative_intercepts() const {
         // compute intercepts of the pieces of the derivative, using continuity
         std::vector<double> cs(breakpoints.size());
         cs[0] = c0 + m0 * (breakpoints[0]);
         for (size_t i = 1; i < breakpoints.size(); i++) {
             cs[i] = cs[i - 1] + slopes[i - 1] * (breakpoints[i] - breakpoints[i - 1]);
         }
+
+        return cs; 
+    }
+
+    std::vector<double> evaluate_at_breakpoints() const {
+        std::vector<double> cs = get_derivative_intercepts(); 
 
         // evaluate at all breakpoints, find interval that contains 0.0 and start there
         size_t l = std::lower_bound(breakpoints.begin(), breakpoints.end(), 0.0) - breakpoints.begin();
@@ -108,9 +117,17 @@ public:
             values[i - 1] -= 0.5 * slopes[i - 1] * (breakpoints[i] * breakpoints[i] - breakpoints[i - 1] * breakpoints[i - 1]);
         }
 
+        return values;
+    }
+
+    // runs in O(k) time
+    double operator()(double x) const {
         // the above can all be done in O(k) time and precomputed
+        std::vector<double> cs = get_derivative_intercepts();
+        std::vector<double> values = evaluate_at_breakpoints();
+
         // now we find the piece that x is in
-        l = std::upper_bound(breakpoints.begin(), breakpoints.end(), x) - breakpoints.begin();
+        size_t l = std::upper_bound(breakpoints.begin(), breakpoints.end(), x) - breakpoints.begin();
         if (l == 0) {
             return values[0] + (c0 * (x - breakpoints[0]) + 0.5 * m0 * (x * x - breakpoints[0] * breakpoints[0]));
         } else {
@@ -123,11 +140,7 @@ public:
     // really, this is the meat of the algorithm
     PiecewiseQuadraticF update_representation(float frequency) const {
         // compute intercepts of the pieces of the derivative, using continuity
-        std::vector<double> cs(breakpoints.size());
-        cs[0] = c0 + m0 * (breakpoints[0]);
-        for (size_t i = 1; i < breakpoints.size(); i++) {
-            cs[i] = cs[i - 1] + slopes[i - 1] * (breakpoints[i] - breakpoints[i - 1]);
-        }
+        std::vector<double> cs = get_derivative_intercepts();
 
         // find first breakpoint x
         size_t l = std::upper_bound(breakpoints.begin(), breakpoints.end(), 0.0) - breakpoints.begin();
@@ -211,6 +224,12 @@ void test_piecewisequadraticf() {
     std::cout <<" BUILT ASDSADAAAAAAAAAAAAAAAAAa" << std::endl;
     for (double x = -2.0; x <= 2.0; x += 0.2) {
         std::cout << "x = " << x << " res(x) = " << res(x) << std::endl;
+    }
+
+    PiecewiseQuadraticF f7(0.3);
+    auto h7 = f7.update_representation(0.4);
+    for (double x = -2.0; x <= 2.0; x += 0.2) {
+        std::cout << "x = " << x << " h7(x) = " << h7(x) << std::endl;
     }
 }
 

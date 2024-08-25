@@ -90,6 +90,21 @@ digraph<clone_tree_vertex> convert_clone_tree(const digraph<int>& clone_tree, si
     return new_clone_tree;
 }
 
+digraph<clone_tree_vertex_l2> convert_clone_tree_l2(const digraph<int>& clone_tree, size_t nrows) {
+    digraph<clone_tree_vertex_l2> new_clone_tree;
+    for (size_t node_id = 0; node_id < clone_tree.nodes().size(); ++node_id) {
+        int clone_id = clone_tree[node_id].data;
+        clone_tree_vertex_l2 vertex_data(nrows, clone_id);
+        new_clone_tree.add_vertex(vertex_data);
+    }
+
+    for (auto [u, v] : clone_tree.edges()) {
+        new_clone_tree.add_edge(u, v);
+    }
+
+    return new_clone_tree;
+}
+
 /*
  * Invalidates all vertices on the path from u to root.
  */ 
@@ -118,7 +133,6 @@ void invalidate(digraph<clone_tree_vertex>& tree, int u, int root) {
  *    vertices of the clone tree.
  *  - F: A frequency matrix represented as a 2D vector.
 */
-/*
 float one_fastbe_l2(
     digraph<clone_tree_vertex_l2>& clone_tree, 
     const std::unordered_map<int, int>& vertex_map, 
@@ -161,12 +175,13 @@ float one_fastbe_l2(
         if (!all_children_valid) continue;
 
         for (size_t j = 0; j < nrows; ++j) {
+            PiecewiseQuadraticF g;
             for (auto k : clone_tree.successors(vertex_map.at(i))) {
-
+                PiecewiseQuadraticF f = clone_tree[k].data.fs[j]; // copy!
+                g = g + f; 
             }
 
-            // compute representation of parent using representation of children
-            clone_tree[vertex_map.at(i)].data.fs[j] = 
+            clone_tree[vertex_map.at(i)].data.fs[j] = g.update_representation(F[j][i]);
         }
 
         clone_tree[vertex_map.at(i)].data.valid = true;
@@ -174,11 +189,19 @@ float one_fastbe_l2(
 
     float obj = 0;
     for (size_t j = 0; j < nrows; ++j) {
+        PiecewiseQuadraticF f = clone_tree[vertex_map.at(root)].data.fs[j];
+        std::vector<double> breakpoints = f.breakpoints;
+        std::vector<double> values = f.evaluate_at_breakpoints();
+        double obj_inc = f.f0;
+        for (size_t i = 0; i < breakpoints.size(); ++i) {
+            obj_inc = std::max(obj_inc, values[i] - breakpoints[i]);
+        }
+
+        obj += obj_inc;
     }
 
-    return -1 * obj;
+    return obj;
 }
-*/
 
 /*
  * Given a frequency matrix $F$ and a clone tree $T$, this function
@@ -716,18 +739,18 @@ void perform_cluster(const argparse::ArgumentParser &cluster) {
 void perform_regression(const argparse::ArgumentParser &regress) {
     auto [clone_tree_int, vertex_map] = parse_adjacency_list(regress.get<std::string>("clone_tree"));
     std::vector<std::vector<float>> frequency_matrix = parse_frequency_matrix(regress.get<std::string>("frequency_matrix"));
-    auto clone_tree = convert_clone_tree(clone_tree_int, frequency_matrix.size());
+    auto clone_tree = convert_clone_tree_l2(clone_tree_int, frequency_matrix.size());
 
     int root = regress.get<int>("assigned_root");
     auto start = std::chrono::high_resolution_clock::now();
-    float obj = one_fastbe_l1(clone_tree, vertex_map, frequency_matrix, root);
+    float obj = one_fastbe_l2(clone_tree, vertex_map, frequency_matrix, root);
 
     for (size_t i = 0; i < regress.get<size_t>("num_reps") - 1; ++i) {
         for (auto vertex : clone_tree.nodes()) {
             clone_tree[vertex].data.valid = false;
         }
 
-        one_fastbe_l1(clone_tree, vertex_map, frequency_matrix, root);
+        one_fastbe_l2(clone_tree, vertex_map, frequency_matrix, root);
     }
 
     auto end = std::chrono::high_resolution_clock::now();
@@ -822,8 +845,6 @@ void perform_search(const argparse::ArgumentParser &search) {
 
 int main(int argc, char *argv[])
 {
-    test_piecewisequadraticf();
-
     auto console_logger = spdlog::stdout_color_mt("fastbe");
     spdlog::set_default_logger(console_logger);
 
