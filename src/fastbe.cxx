@@ -194,6 +194,7 @@ float one_fastbe_l2(
         std::vector<double> values = f.evaluate_at_breakpoints();
         double obj_inc = f.f0;
         for (size_t i = 0; i < breakpoints.size(); ++i) {
+            if (breakpoints[i] < 0.0) continue;
             obj_inc = std::max(obj_inc, values[i] - breakpoints[i]);
         }
 
@@ -843,8 +844,7 @@ void perform_search(const argparse::ArgumentParser &search) {
     return;
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     auto console_logger = spdlog::stdout_color_mt("fastbe");
     spdlog::set_default_logger(console_logger);
 

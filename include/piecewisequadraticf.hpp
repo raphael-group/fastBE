@@ -127,7 +127,7 @@ public:
         std::vector<double> values = evaluate_at_breakpoints();
 
         // now we find the piece that x is in
-        size_t l = std::upper_bound(breakpoints.begin(), breakpoints.end(), x) - breakpoints.begin();
+        size_t l = std::lower_bound(breakpoints.begin(), breakpoints.end(), x) - breakpoints.begin();
         if (l == 0) {
             return values[0] + (c0 * (x - breakpoints[0]) + 0.5 * m0 * (x * x - breakpoints[0] * breakpoints[0]));
         } else {
@@ -143,19 +143,19 @@ public:
         std::vector<double> cs = get_derivative_intercepts();
 
         // find first breakpoint x
-        size_t l = std::upper_bound(breakpoints.begin(), breakpoints.end(), 0.0) - breakpoints.begin();
+        size_t l = std::lower_bound(breakpoints.begin(), breakpoints.end(), 0.0) - breakpoints.begin();
         float x = 0.0;
         if (l == 0) {
             x = frequency - c0;
         } else {
-            x = frequency + (0.5*breakpoints[l-1]) - cs[l - 1] + (breakpoints[l-1] * (slopes[l-1] - 0.5));
+            x = frequency + (0.5 * breakpoints[l-1]) - cs[l - 1] + (breakpoints[l-1] * (slopes[l-1] - 0.5));
         }
 
         x *= 2.0;
 
         std::vector<double> zs(breakpoints.size());
         for (size_t i = 0; i < breakpoints.size(); i++) {
-            zs[i] = 2.0 *(frequency + 0.5 * breakpoints[i] - cs[i]);
+            zs[i] = 2.0 * (frequency + 0.5 * breakpoints[i] - cs[i]);
         }
 
         std::vector<double> new_breakpoints;
@@ -177,17 +177,9 @@ public:
         }
         
         double new_m0 = -0.5;
-        double new_c0 = 0.0;
-        l = std::upper_bound(new_breakpoints.begin(), new_breakpoints.end(), 0.0) - new_breakpoints.begin();
-        if (l == 0) {
-            new_c0 = frequency;
-        } else if (l == 1) {
-            new_c0 = frequency - 0.5 * new_breakpoints[0];
-        } else {
-            new_c0 = cs[l];
-        }
+        double new_c0 = frequency;
 
-        l = std::upper_bound(zs.begin(), zs.end(), 0.0) - zs.begin();
+        l = std::lower_bound(zs.begin(), zs.end(), 0.0) - zs.begin();
         double alpha_star = 0.0;
 
         if (l == 0) {
@@ -211,6 +203,7 @@ public:
 };
 
 void test_piecewisequadraticf() {
+    /*
     PiecewiseQuadraticF f1(0.7), f2(0.3), f3(0.9), f4(1.0), f5(0.0);
 
     PiecewiseQuadraticF f123 = f1 + f2 + f3 + f4 + f5;
@@ -225,12 +218,32 @@ void test_piecewisequadraticf() {
     for (double x = -2.0; x <= 2.0; x += 0.2) {
         std::cout << "x = " << x << " res(x) = " << res(x) << std::endl;
     }
+    */
 
-    PiecewiseQuadraticF f7(0.3);
-    auto h7 = f7.update_representation(0.4);
-    for (double x = -2.0; x <= 2.0; x += 0.2) {
-        std::cout << "x = " << x << " h7(x) = " << h7(x) << std::endl;
+    PiecewiseQuadraticF g(0.3);
+    auto J1 = g.update_representation(1.0).update_representation(0.5);
+    
+    // print breakpoints, slopes, and values
+    auto J1_cs = J1.get_derivative_intercepts();
+    std::cout << J1.f0 << " " << J1.c0 << " " << J1.m0 << std::endl;
+    for (size_t i = 0; i < J1.breakpoints.size(); i++) {
+        std::cout << "b_" << i << " = " << J1.breakpoints[i] << " c_" << i << " = " << J1_cs[i] << " m_" << i << " = " << J1.slopes[i] << std::endl;
     }
+
+    //auto J2 = J1.update_representation(0.0);
+    //auto J2_cs = J2.get_derivative_intercepts();
+    //auto J2_vals = J2.evaluate_at_breakpoints();
+    //
+    //std::cout << J2.f0 << " " << J2.c0 << " " << J2.m0 << std::endl;
+    //for (size_t i = 0; i < J2.breakpoints.size(); i++) {
+        //////// std::cout << "b_" << i << " = " << J2.breakpoints[i] << " c_" << i << " = " << J2_cs[i] << " m_" << i << " = " << J2.slopes[i] << std::endl;
+        //std::cout << "f(b_" << i << ") = " << J2_vals[i] << std::endl;
+    //}
+
+    for (double x = -2.0; x <= 2.0; x += 0.2) {
+        std::cout << "x = " << x << " J1(x) = " << J1(x) << std::endl;
+    }
+    
 }
 
 #endif

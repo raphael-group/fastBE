@@ -23,8 +23,10 @@ if __name__ == '__main__':
     m, n = frequency_matrix.shape
 
     print(f"{n} {m}")
-    for i in range(m):
-        print(" ".join(map(str, frequency_matrix[i,:])))
+    for j in range(n):
+        for i in range(m):
+            print(frequency_matrix[i,j], end=" ")
+    print()
 
     for i in range(n):
         print("1.0", end=" ")
@@ -40,5 +42,5 @@ if __name__ == '__main__':
     for i in range(n):
         neighbors = list(tree.successors(i)) + list(tree.predecessors(i))
         print(" ".join(map(str, neighbors)))
-    print(1)
+    print(0)
 
