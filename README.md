@@ -93,8 +93,9 @@ takes as input an $m \times n$ frequency matrix $F$ and an $n$-clonal
 tree $\mathcal{T}$ and outputs the minimum value of 
 $\lVert F - UB_{\mathcal{T}} \rVert_1$ over all usage matrices $U$.
 The `cluster` mode takes as input an $n$-mutation tree $\mathcal{T}$,
-an $m \times n$ frequency matrix $F$, and the number of clusters $k$,  
-and outputs a clustering of the $n$ mutations into $k$ clusters.
+an $m \times n$ frequency matrix $F$, and the number of clusters $k$. 
+The `cluster` mode then outputs a clustering of the $n$ mutations into
+$k$ clusters.
 
 > [!IMPORTANT] 
 > The search command requires a root vertex specified with the 
@@ -189,11 +190,12 @@ When the clones are unknown, we run `fastbe` with the *mutation
 frequency matrix* and specify the root as the second mutation in the
 frequency matrix with the command:
 ```
-fastbe search examples/sim_obs_frequency_matrix.txt -o examples/fastbe -f 1
+fastbe search examples/sim_obs_full_frequency_matrix.txt -o examples/fastbe -f 1
 ```
-Of course, one frequently then uses the inferred tree to infer the
-clones. To do this, we run the *cluster* command with the inferred
-*mutation tree* and the frequency matrix:
+As one often wants the clones, one can use the inferred tree to 
+infer the clones with phylogenetically constrained clustering. To do this, 
+we run the *cluster* command with the inferred *mutation tree* and 
+the frequency matrix:
 ```
 fastbe cluster -k 10 examples/fastbe_tree.txt examples/sim_obs_full_frequency_matrix.txt -o examples/fastbe -l L2
 ```
