@@ -61,22 +61,25 @@ The output binary will be located at `build/src/fastbe`.
 To run *fastbe*, simply execute the binary. 
 ```
 $ fastbe
-Usage: fastbe [--help] [--version] {regress,search}
+Usage: fastbe [--help] [--version] {cluster,regress,search}
 
 Optional arguments:
-  -h, --help     shows help message and exits 
-  -v, --version  prints version information and exits 
+  -h, --help     shows help message and exits
+  -v, --version  prints version information and exits
 
 Subcommands:
-  regress       Regresses a clone tree onto a frequency matrix.
-  search        Searches for a clone tree that best fits a frequency matrix.
+  cluster       clusters the mutations (columns) of a frequency matrix.
+  regress       regresses a clone tree onto a frequency matrix.
+  search        searches for a clone tree that best fits a frequency matrix.
 ```
 
-The two modes of fastbe are `search` and `regress`. The `search` mode
-infers the phylogenetic tree best fitting the input frequency matrix, while
-the `regress` mode infers the fit of the input tree to the frequency matrix.
-If one is interested in inferring a phylogenetic tree
-from a frequency matrix, the `search` mode should be used. 
+The three modes of fastbe are `search`, `regress`, and `cluster`. 
+The `search` mode infers the phylogenetic tree best fitting the input 
+frequency matrix, the `regress` mode infers the fit of the input 
+tree to the frequency matrix, and the `cluster` mode clusters mutations
+into clones using phylogeny constrained clustering. If one is interested in 
+inferring a phylogenetic tree from a frequency matrix, the `search` mode 
+should be used. 
 
 Formally, the `search` mode
 solves the variant allele frequency $\ell_1$-factorization problem, 
@@ -89,6 +92,9 @@ The `regress` mode
 takes as input an $m \times n$ frequency matrix $F$ and an $n$-clonal
 tree $\mathcal{T}$ and outputs the minimum value of 
 $\lVert F - UB_{\mathcal{T}} \rVert_1$ over all usage matrices $U$.
+The `cluster` mode takes as input an $n$-mutation tree $\mathcal{T}$,
+an $m \times n$ frequency matrix $F$, and the number of clusters $k$,  
+and outputs a clustering of the $n$ mutations into $k$ clusters.
 
 > [!IMPORTANT] 
 > The search command requires a root vertex specified with the 
@@ -112,26 +118,26 @@ More formally, $F_{ij}$ is the frequency of the $j^{\text{th}}$ mutation
 in the $i^{\text{th}}$ sample. As an example, a frequency matrix $F$ 
 describing $20$ samples and $10$ mutations is:
 ```
-1.0000 0.9801 0.0000 0.8265 0.0156 0.3683 0.2450 0.1218 0.1260 0.0000
-1.0000 1.0000 0.0000 0.1257 0.0000 0.0000 0.0000 0.0000 0.0000 0.1436
-1.0000 0.5202 0.0000 0.4053 0.5045 0.0000 0.0000 0.1945 0.0000 0.0000
-1.0000 0.3497 0.6616 0.1302 0.0000 0.0000 0.0000 0.1558 0.0000 0.0000
-1.0000 0.7233 0.1356 0.5780 0.1640 0.0574 0.0785 0.2873 0.0728 0.1083
-1.0000 0.8394 0.0646 0.8530 0.0000 0.0000 0.0000 0.0000 0.0000 0.8353
-1.0000 0.1309 0.6547 0.0000 0.0174 0.0000 0.0000 0.0000 0.0000 0.0000
-1.0000 0.4203 0.1889 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
-1.0000 0.2731 0.1406 0.2768 0.4452 0.0000 0.0000 0.0000 0.0000 0.0000
-1.0000 0.5346 0.4651 0.5437 0.0000 0.0000 0.0000 0.1311 0.1069 0.0000
-1.0000 0.1043 0.0000 0.1258 0.7614 0.0000 0.0000 0.0566 0.0685 0.0562
-1.0000 0.8784 0.0000 0.3935 0.0122 0.0000 0.0124 0.2469 0.2382 0.1668
-1.0000 1.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000
-1.0000 0.9163 0.0412 0.8878 0.0348 0.1197 0.1299 0.6229 0.4443 0.0010
-1.0000 0.9130 0.0418 0.6500 0.0458 0.0000 0.0000 0.0000 0.0000 0.0000
-1.0000 0.8923 0.0000 0.9118 0.0000 0.0000 0.0000 0.9092 0.0000 0.0000
-1.0000 0.9318 0.0000 0.9369 0.0704 0.0000 0.0000 0.8478 0.8136 0.0000
-1.0000 0.4489 0.3422 0.4024 0.1828 0.0270 0.0000 0.3257 0.3120 0.0350
-1.0000 0.9753 0.0000 0.8931 0.0000 0.5100 0.0506 0.0682 0.0000 0.1435
-1.0000 1.0000 0.0000 1.0000 0.0000 0.0000 1.0000 0.0000 0.0000 0.0000
+1.0000 0.3217 0.3425 0.0000 0.0000 0.0000 0.4444 0.0000 0.6857 0.0000
+1.0000 0.5141 0.5128 0.0165 0.0000 0.0000 0.5417 0.3842 0.0891 0.0000
+1.0000 0.0563 0.3483 0.0000 0.5000 0.0833 0.3566 0.4167 0.1527 0.4953
+1.0000 0.1644 0.3261 0.0000 0.4679 0.0000 0.1826 0.4906 0.0000 0.4500
+1.0000 0.0000 0.0000 0.0000 1.0000 0.0000 0.0000 1.0000 0.0000 1.0000
+1.0000 0.0909 0.2800 0.0000 0.3047 0.0000 0.3220 0.2986 0.2510 0.2857
+1.0000 1.0000 1.0000 0.0000 0.0000 0.0000 1.0000 0.0000 0.0000 0.0000
+1.0000 0.1953 0.2206 0.1354 0.1917 0.0896 0.1339 0.5255 0.0996 0.3945
+1.0000 0.0815 0.3684 0.0505 0.1500 0.0238 0.2056 0.5045 0.1148 0.2400
+1.0000 0.0000 0.0476 0.0000 0.0000 0.0000 0.0000 0.8865 0.0000 0.9300
+1.0000 0.1437 0.8081 0.0000 0.0152 0.0000 0.1610 0.0046 0.0000 0.0175
+1.0000 0.4094 0.5625 0.0000 0.0000 0.0000 0.4054 0.0000 0.0000 0.0000
+1.0000 0.0000 0.2018 0.2866 0.5050 0.0000 0.0000 0.4650 0.0000 0.4623
+1.0000 0.0000 0.5275 0.4424 0.0000 0.0000 0.0000 0.0000 0.1310 0.0000
+1.0000 0.0000 0.0000 0.0000 0.7236 0.0000 0.0000 0.8315 0.0545 0.7200
+1.0000 0.4534 0.4459 0.0000 0.0143 0.0000 0.4766 0.1818 0.2152 0.1282
+1.0000 1.0000 1.0000 0.0000 0.0000 0.0000 1.0000 0.0000 0.0000 0.0000
+1.0000 0.0704 0.1757 0.0000 0.0432 0.1094 0.2000 0.2020 0.5352 0.0000
+1.0000 0.2138 0.2877 0.6715 0.0175 0.0000 0.2736 0.0711 0.0000 0.0804
+1.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.8703 0.0000 0.0000
 ```
 
 The above frequency matrix $F$ is provided as an input file at `examples/sim_obs_frequency_matrix.txt`.
@@ -141,16 +147,16 @@ frequency matrix $F$ and an $n$-clonal tree $\mathcal{T}$. The tree is specified
 as an adjacency list in `.txt` format. An example of a clonal tree
 which consists of $10$ clones rooted at the $0$ vertex is:
 ```
-0 1 2 4
-1 3
-2
-3 5 6 7 9
+0 2 3 7 8
+1
+2 6
+3
 4
 5
-6
-7 8
-8
-9
+6 1
+7 9
+8 5
+9 4
 ```
 
 The above clonal tree $\mathcal{T}$ is provided as an input file at `examples/sim_tree.txt`. Each
@@ -158,23 +164,42 @@ vertex in the adjacency list corresponds to a clone. The name of the vertex corr
 to the index of the mutation in the frequency matrix on the edge leading to the vertex.
 
 The above frequency matrix and clonal tree were generated using the command,
-`python scripts/simulation.py --clones 20 --samples 10 --coverage 100 --seed 0 --mutations 100 --output examples/sim`
+`python scripts/simulation.py --clones 10 --samples 20 --coverage 40 --seed 0 --mutations 40 --output examples/sim`
 which simulates the evolution of a tumor with $10$ mutation clusters (equivalently, clones) and $20$ samples at a 
-read depth of $100\times$ and $100$ mutations distribution across the $10$ mutation clusters.
+read depth of $40\times$. The $40$ mutations are distributed across the $10$ mutation clusters.
 Several other files such as the mutation to clone mapping, the ground truth usage matrix $U$, clonal
 matrix $B$, and read count matrices are also provided in the `examples/` directory.
 
 ### Example
 
 As an example, we infer a phylogenetic tree from the simulated
-data with $20$ samples and $10$ clones. To run `fastbe` on this data,
-execute:
+data with $20$ samples and $10$ clones and $40$ mutations. 
+To run `fastbe` on this data, assuming the clones are known we 
+can pass in the *clonal frequency matrix* by executing:
 ```
 fastbe search examples/sim_obs_frequency_matrix.txt -o examples/fastbe
 ```
 This command will output an adjacency list describing the clonal tree 
 at `examples/fastbe_tree.txt` and a `.json` file containing metadata
-at `examples/fastbe_results.json`.
+at `examples/fastbe_results.json`. Note that we did not specify the root
+of the tree, so the root is assumed to be the first column of the 
+frequency matrix.
+
+When the clones are unknown, we run `fastbe` with the *mutation
+frequency matrix* and specify the root as the second mutation in the
+frequency matrix with the command:
+```
+fastbe search examples/sim_obs_frequency_matrix.txt -o examples/fastbe -f 1
+```
+Of course, one frequently then uses the inferred tree to infer the
+clones. To do this, we run the *cluster* command with the inferred
+*mutation tree* and the frequency matrix:
+```
+fastbe cluster -k 10 examples/fastbe_tree.txt examples/sim_obs_full_frequency_matrix.txt -o examples/fastbe -l L2
+```
+This command will output the inferred clones at 
+`examples/fastbe_clustering.csv` and a `examples/fastbe_results.json` file 
+containing important metadata.
 
 ### Benchmarks
 

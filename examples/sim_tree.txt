@@ -1,28 +1,13 @@
-#scripts/simulation.py --clones 25 --mutations 100 --samples 20 --coverage 50 --seed 73 --output examples/sim
-# GMT Wed Jan 24 18:09:41 2024
+#scripts/simulation.py --mutations 40 --clones 10 --samples 20 --coverage 40 --seed 0 --output examples/sim
+# GMT Fri Oct  4 15:11:53 2024
 # 
-0 5 23
-1 17 15
-2 3 18 20
-3 14
-4 8
-5 24
-6 7
-7 12 19
-8
-9
-10
-11 4
-12 1
-13
-14
-15
-16
-17 21 16
-18 11
-19 9
-20 10
-21 2 22
-22
-23 13
-24 6
+0 2 3 7 8
+1
+2 6
+3
+4
+5
+6 1
+7 9
+8 5
+9 4
