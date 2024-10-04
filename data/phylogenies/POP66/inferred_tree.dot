@@ -1,0 +1,62 @@
+digraph G {
+fontname = "helvetica";
+edge[arrowhead="vee"];
+node[colorscheme=gnbu9]
+0 [shape=box style="rounded,filled" fillcolor=5 penwidth=0 label=<<B><I>Normal Clone</I></B>>]
+6 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 6:</B></I><BR/>ADAMTS3<BR/>JPH3<BR/>INTU<BR/>PCDH10<BR/>CNR1<BR/>ZC3H13<BR/>ITGAL<BR/>ANK2<BR/>CLUL1<BR/>KDR<BR/>DSE>]
+62 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 62:</B></I><BR/>GRID2<BR/>TEPP>]
+27 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 27:</B></I><BR/>FAM124A>]
+23 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 23:</B></I><BR/>LOC100287036>]
+21 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 21:</B></I><BR/>ROS1>]
+20 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 20:</B></I><BR/>PHIP>]
+44 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 44:</B></I><BR/>ZGRF1<BR/>PTK7<BR/>CDT1<BR/>THUMPD1<BR/>GABRR2<BR/>DOK4<BR/>DRC7<BR/>BEND4>]
+28 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 28:</B></I><BR/>PIEZO1>]
+37 [shape=box style="rounded,filled" fillcolor=4 penwidth=0 label=<<I><B>Clone 37:</B></I><BR/>SHROOM3>]
+25 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 25:</B></I><BR/>VWA8>]
+63 [shape=box style="rounded,filled" fillcolor=4 penwidth=0 label=<<I><B>Clone 63:</B></I><BR/>PPIL6>]
+58 [shape=box style="rounded,filled" fillcolor=4 penwidth=0 label=<<I><B>Clone 58:</B></I><BR/>ARHGAP24>]
+65 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 65:</B></I><BR/>CEP192>]
+26 [shape=box style="rounded,filled" fillcolor=4 penwidth=0 label=<<I><B>Clone 26:</B></I><BR/>LRRC63>]
+16 [shape=box style="rounded,filled" fillcolor=4 penwidth=0 label=<<I><B>Clone 16:</B></I><BR/>ZNF646>]
+24 [shape=box style="rounded,filled" fillcolor=4 penwidth=0 label=<<I><B>Clone 24:</B></I><BR/>BANP>]
+31 [shape=box style="rounded,filled" fillcolor=4 penwidth=0 label=<<I><B>Clone 31:</B></I><BR/>NUS1<BR/>ESCO1>]
+13 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 13:</B></I><BR/>LIMCH1<BR/>KIT<BR/>CLEC18A>]
+29 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 29:</B></I><BR/>RPGRIP1L>]
+32 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 32:</B></I><BR/>CHD9>]
+30 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 30:</B></I><BR/>UBA6>]
+55 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 55:</B></I><BR/>FNDC3A<BR/>PKD1>]
+50 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 50:</B></I><BR/>BBS2<BR/>CLEC19A<BR/>TBC1D24<BR/>NOD2<BR/>ANK2<BR/>EEF2K<BR/>AC004233.2<BR/>CX3CL1>]
+15 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 15:</B></I><BR/>ARHGAP17<BR/>SLC5A11<BR/>PIEZO1<BR/>FAM114A1>]
+36 [shape=box style="rounded,filled" fillcolor=4 penwidth=0 label=<<I><B>Clone 36:</B></I><BR/>CD109<BR/>FABP7>]
+17 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 17:</B></I><BR/>MAZ<BR/>NPIPB6>]
+35 [shape=box style="rounded,filled" fillcolor=4 penwidth=0 label=<<I><B>Clone 35:</B></I><BR/>AC099489.1<BR/>XPO6<BR/>LAMA1>]
+19 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 19:</B></I><BR/>SRRM2<BR/>UCHL1>]
+0 -> 36
+0 -> 6
+0 -> 44
+6 -> 27
+6 -> 62
+62 -> 23
+62 -> 21
+62 -> 20
+62 -> 19
+62 -> 55
+62 -> 13
+62 -> 15
+62 -> 35
+44 -> 28
+44 -> 37
+37 -> 25
+37 -> 63
+63 -> 58
+63 -> 65
+63 -> 50
+58 -> 29
+58 -> 32
+58 -> 30
+65 -> 26
+65 -> 16
+65 -> 24
+65 -> 17
+65 -> 31
+}

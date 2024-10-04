@@ -1,0 +1,38 @@
+digraph G {
+fontname = "helvetica";
+edge[arrowhead="vee"];
+node[colorscheme=gnbu9]
+0 [shape=box style="rounded,filled" fillcolor=5 penwidth=0 label=<<B><I>Normal Clone</I></B>>]
+14 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 14:</B></I><BR/>chr1_115256530>]
+15 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 15:</B></I><BR/>chr1_115258747>]
+4 [shape=box style="rounded,filled" fillcolor=4 penwidth=0 label=<<I><B>Clone 4:</B></I><BR/>chr19_54403664>]
+1 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 1:</B></I><BR/>chr15_41072153>]
+2 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 2:</B></I><BR/>chr6_72960124>]
+3 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 3:</B></I><BR/>chr1_120337202>]
+6 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 6:</B></I><BR/>chr5_140256803>]
+11 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 11:</B></I><BR/>chr12_120583105>]
+16 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 16:</B></I><BR/>chr8_117870645>]
+5 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 5:</B></I><BR/>chr19_39398090>]
+7 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 7:</B></I><BR/>chr1_247587156>]
+8 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 8:</B></I><BR/>chr12_49888575>]
+10 [shape=box style="rounded,filled" fillcolor=4 penwidth=0 label=<<I><B>Clone 10:</B></I><BR/>chr7_11075310>]
+9 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 9:</B></I><BR/>chr11_55371083>]
+12 [shape=box style="rounded,filled" fillcolor=4 penwidth=0 label=<<I><B>Clone 12:</B></I><BR/>chr4_149035254>]
+13 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 13:</B></I><BR/>chr9_109686536>]
+0 -> 14
+0 -> 15
+0 -> 4
+0 -> 1
+4 -> 6
+1 -> 2
+2 -> 3
+3 -> 16
+6 -> 11
+11 -> 5
+16 -> 9
+5 -> 7
+7 -> 8
+8 -> 10
+10 -> 12
+9 -> 13
+}

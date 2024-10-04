@@ -1,0 +1,12 @@
+digraph G {
+fontname = "helvetica";
+edge[arrowhead="vee"];
+node[colorscheme=gnbu9]
+0 [shape=box style="rounded,filled" fillcolor=5 penwidth=0 label=<<B><I>Normal Clone</I></B>>]
+50 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 50:</B></I><BR/>chrX_140786540<BR/>chrX_21674307<BR/>chrX_103296195<BR/>chrX_115573955<BR/>chrX_142717442<BR/>chrX_123554275>]
+70 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 70:</B></I><BR/>chr11_130781633<BR/>chr10_55912914<BR/>chr15_86702217<BR/>chr2_197171943<BR/>chr5_150925586<BR/>chr12_83289809<BR/>chr11_31327897<BR/>chr9_130575902<BR/>chr19_57641945<BR/>chr9_135465483<BR/>chr2_168107259<BR/>chr2_141459714<BR/>chr12_3103944<BR/>chr1_223441998<BR/>chr12_21693481<BR/>chr5_150945278<BR/>chr1_186342527<BR/>chr15_99486144<BR/>chr9_132982039<BR/>chr2_178407982<BR/>chr14_25101215<BR/>chr7_140218298<BR/>chr5_135513047<BR/>chr14_71205049<BR/>chr14_63447749<BR/>chr2_98999900<BR/>chr5_153054171<BR/>chr19_34833074<BR/>chr18_23873495<BR/>chr3_64501786<BR/>chr1_34128698<BR/>chr5_178986772<BR/>chr3_51737870<BR/>chr6_114182916<BR/>chr16_747032<BR/>chr9_119802237<BR/>chr2_183642336<BR/>chr2_139656063<BR/>chr13_44971649<BR/>chr4_74736547<BR/>chr6_64292496<BR/>chr10_71331961<BR/>chr8_122625606<BR/>chr11_120811098<BR/>chr5_82834097>]
+71 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 71:</B></I><BR/>chr18_23873466<BR/>chr20_43382906<BR/>chr7_6201566<BR/>chr12_48387269<BR/>chr19_11512925<BR/>chr5_126674907<BR/>chr5_180274623<BR/>chr9_14746440<BR/>chr6_52364431<BR/>chr12_16056136<BR/>chr14_72196795<BR/>chr7_99949818<BR/>chr11_100179143<BR/>chr3_124485174<BR/>chr19_11545917<BR/>chr2_112621377<BR/>chr11_59596956<BR/>chr12_51381045<BR/>chr1_103487290<BR/>chr17_48276772>]
+0 -> 50
+50 -> 70
+50 -> 71
+}

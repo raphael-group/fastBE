@@ -1,0 +1,40 @@
+digraph G {
+fontname = "helvetica";
+edge[arrowhead="vee"];
+node[colorscheme=gnbu9]
+0 [shape=box style="rounded,filled" fillcolor=5 penwidth=0 label=<<B><I>Normal Clone</I></B>>]
+3 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 3:</B></I><BR/>IL17RB>]
+4 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 4:</B></I><BR/>PLEKHA6<BR/>APPL1>]
+24 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 24:</B></I><BR/>SNX18>]
+5 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 5:</B></I><BR/>FBXW11<BR/>RBSN<BR/>TMEM40>]
+10 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 10:</B></I><BR/>WWC1>]
+8 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 8:</B></I><BR/>RARS>]
+7 [shape=box style="rounded,filled" fillcolor=4 penwidth=0 label=<<I><B>Clone 7:</B></I><BR/>OR13G1>]
+20 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 20:</B></I><BR/>FAM208A<BR/>RBM5<BR/>DOCK3>]
+15 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 15:</B></I><BR/>KIAA0825>]
+25 [shape=box style="rounded,filled" fillcolor=4 penwidth=0 label=<<I><B>Clone 25:</B></I><BR/>ADGRV1>]
+9 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 9:</B></I><BR/>NFASC<BR/>ARF4>]
+11 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 11:</B></I><BR/>CEP170>]
+13 [shape=box style="rounded,filled" fillcolor=4 penwidth=0 label=<<I><B>Clone 13:</B></I><BR/>OR2T11>]
+16 [shape=box style="rounded,filled" fillcolor=4 penwidth=0 label=<<I><B>Clone 16:</B></I><BR/>RASGEF1C<BR/>OR2AJ1>]
+18 [shape=box style="rounded,filled" fillcolor=2 penwidth=0 label=<<I><B>Clone 18:</B></I><BR/>NEK7>]
+19 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 19:</B></I><BR/>RANBP17>]
+12 [shape=box style="rounded,filled" fillcolor=3 penwidth=0 label=<<I><B>Clone 12:</B></I><BR/>ZNF717<BR/>ABHD5>]
+0 -> 3
+0 -> 5
+3 -> 12
+3 -> 4
+4 -> 24
+4 -> 20
+24 -> 11
+24 -> 13
+5 -> 10
+5 -> 8
+5 -> 7
+5 -> 9
+20 -> 15
+20 -> 25
+20 -> 16
+16 -> 18
+16 -> 19
+}

@@ -1,0 +1,216 @@
+{
+    "samples": [
+        "D",
+        "Diagnosis Xeno 1",
+        "Diagnosis Xeno 2",
+        "Diagnosis Xeno 3",
+        "Diagnosis Xeno 4",
+        "Diagnosis Xeno 5",
+        "Diagnosis Xeno 6",
+        "Diagnosis Xeno 7",
+        "Diagnosis Xeno 8",
+        "Diagnosis Xeno 9",
+        "Diagnosis Xeno 10",
+        "Diagnosis Xeno 11",
+        "Diagnosis Xeno 12",
+        "R1",
+        "Relapse Xeno 1",
+        "Relapse Xeno 2",
+        "Relapse Xeno 3",
+        "Relapse Xeno 4",
+        "Relapse Xeno 5",
+        "Relapse Xeno 7",
+        "Relapse Xeno 8",
+        "Diagnosis Xeno 1 Spleen",
+        "Diagnosis Xeno 2 Spleen",
+        "Diagnosis Xeno 4 Spleen",
+        "Diagnosis Xeno 5 Spleen",
+        "Diagnosis Xeno 8 Spleen"
+    ],
+    "clusters": [
+        [
+            "s6"
+        ],
+        [
+            "s9"
+        ],
+        [
+            "s17"
+        ],
+        [
+            "s33"
+        ],
+        [
+            "s38"
+        ],
+        [
+            "s44"
+        ],
+        [
+            "s13"
+        ],
+        [
+            "s50"
+        ],
+        [
+            "s55"
+        ],
+        [
+            "s2"
+        ],
+        [
+            "s4"
+        ],
+        [
+            "s5"
+        ],
+        [
+            "s12"
+        ],
+        [
+            "s35"
+        ],
+        [
+            "s36"
+        ],
+        [
+            "s39"
+        ],
+        [
+            "s45"
+        ],
+        [
+            "s57"
+        ],
+        [
+            "s61"
+        ],
+        [
+            "s43"
+        ],
+        [
+            "s26"
+        ],
+        [
+            "s25"
+        ],
+        [
+            "s58"
+        ],
+        [
+            "s54"
+        ],
+        [
+            "s34"
+        ],
+        [
+            "s56"
+        ],
+        [
+            "s41"
+        ],
+        [
+            "s28"
+        ],
+        [
+            "s29"
+        ],
+        [
+            "s30"
+        ],
+        [
+            "s10"
+        ],
+        [
+            "s27"
+        ],
+        [
+            "s52"
+        ],
+        [
+            "s8"
+        ],
+        [
+            "s16"
+        ],
+        [
+            "s0"
+        ],
+        [
+            "s1"
+        ],
+        [
+            "s3"
+        ],
+        [
+            "s7"
+        ],
+        [
+            "s18"
+        ],
+        [
+            "s19"
+        ],
+        [
+            "s31"
+        ],
+        [
+            "s37"
+        ],
+        [
+            "s47"
+        ],
+        [
+            "s49"
+        ],
+        [
+            "s59"
+        ],
+        [
+            "s15"
+        ],
+        [
+            "s20"
+        ],
+        [
+            "s21"
+        ],
+        [
+            "s60"
+        ],
+        [
+            "s22"
+        ],
+        [
+            "s32"
+        ],
+        [
+            "s42"
+        ],
+        [
+            "s48"
+        ],
+        [
+            "s24"
+        ],
+        [
+            "s14"
+        ],
+        [
+            "s11"
+        ],
+        [
+            "s23"
+        ],
+        [
+            "s40"
+        ],
+        [
+            "s46"
+        ]
+    ],
+    "garbage": [
+        "s53",
+        "s51"
+    ]
+}
