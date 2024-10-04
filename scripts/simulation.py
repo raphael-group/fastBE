@@ -218,12 +218,13 @@ def main():
     )
 
     f_hat, collapsed_variant_matrix, collapsed_total_matrix = observe_frequency_matrix(variant_matrix, total_matrix, mutation_to_clone_mapping, args.clones)
+    full_frequeny_matrix = variant_matrix / total_matrix
     
     np.savetxt(f'{args.output}_clonal_matrix.txt', clonal_matrix, fmt='%d')
     np.savetxt(f'{args.output}_usage_matrix.txt', usage_matrix, fmt='%.4f')
     np.savetxt(f'{args.output}_variant_matrix.txt', variant_matrix, fmt='%d')
     np.savetxt(f'{args.output}_total_matrix.txt', total_matrix, fmt='%d')
-    np.savetxt(f'{args.output}_uncollapsed_frequency_matrix.txt', variant_matrix / total_matrix, fmt='%.4f')
+    np.savetxt(f'{args.output}_obs_full_frequency_matrix.txt', full_frequeny_matrix, fmt='%.4f')
     np.savetxt(f'{args.output}_obs_frequency_matrix.txt', f_hat, fmt='%.4f')
     np.savetxt(f'{args.output}_collapsed_variant_matrix.txt', collapsed_variant_matrix, fmt='%d')
     np.savetxt(f'{args.output}_collapsed_total_matrix.txt', collapsed_total_matrix, fmt='%d')

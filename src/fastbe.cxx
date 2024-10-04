@@ -13,7 +13,6 @@
 
 #include <cmath>
 #include <unordered_map>
-#include <random>
 #include <chrono>
 #include <functional>
 #include <random>
@@ -278,9 +277,9 @@ std::vector<std::pair<float, long long>> score_placements(
 }
 
 /* 
- * Performs beam search to infer a clone tree from a frequency matrix.
+ * Performs (forward) beam search to infer a clone tree from a frequency matrix.
  */
-std::pair<digraph<clone_tree_vertex>, std::unordered_map<int, int>> beam_search(
+std::pair<digraph<clone_tree_vertex>, std::unordered_map<int, int>> forward_beam_search(
     const std::vector<std::vector<float>>& F, 
     int root,
     std::vector<int> clone_order,
@@ -422,6 +421,262 @@ std::vector<std::vector<float>> parse_frequency_matrix(const std::string& filena
     return matrix;
 }
 
+    
+enum class loss_type {L1, L2};
+
+float sum(const std::vector<std::vector<float>>& frequency_matrix, const std::vector<int>& columns, int i) {
+    float sum = 0;
+    for (auto col : columns) {
+        sum += frequency_matrix[i][col];
+    }
+    return sum;
+}
+
+float median(const std::vector<std::vector<float>>& frequency_matrix, const std::vector<int>& columns, int i) {
+    std::vector<float> values;
+    for (auto col : columns) {
+        values.push_back(frequency_matrix[i][col]);
+    }
+
+    std::sort(values.begin(), values.end());
+    size_t n = values.size();
+    if (n % 2 == 0) {
+        return (values[n/2 - 1] + values[n/2]) / 2;
+    } else {
+        return values[n/2];
+    }
+}
+
+/*
+ * Computes the score of a cluster of clones (columns) in the 
+ * frequency matrix.
+ */
+float compute_component_score(
+    loss_type loss,
+    const std::vector<std::vector<float>>& frequency_matrix,
+    const std::vector<int>& columns
+) {
+    int m = frequency_matrix.size();
+
+    // compute optimal center
+    std::vector<float> center(m, 0.0);
+    for (int i = 0; i < m; ++i) {
+        if (loss == loss_type::L2) {
+            center[i] = sum(frequency_matrix, columns, i) / columns.size();
+        } else {
+            center[i] = median(frequency_matrix, columns, i);
+        }
+    }
+
+    double obj = 0;
+    for (int i = 0; i < m; i++) {
+        for (auto j : columns) {
+            if (loss == loss_type::L2) {
+                obj += (frequency_matrix[i][j] - center[i]) * (frequency_matrix[i][j] - center[i]);
+            } else {
+                obj += std::abs(frequency_matrix[i][j] - center[i]);
+            }
+        }
+    }
+
+    return obj;
+}
+
+/* 
+ * Returns the connected components of an induced subgraph 
+ * in the clone tree when viewed as an undirected graph.
+ */
+std::vector<std::vector<int>> connected_components(
+    const digraph<int>& clone_tree,
+    const std::vector<int>& subgraph
+) {
+    std::set<int> unvisited(subgraph.begin(), subgraph.end());
+    std::vector<std::vector<int>> components;
+
+    while (!unvisited.empty()) {
+        std::queue<int> q;
+        q.push(*unvisited.begin());
+        std::vector<int> component;
+        while (!q.empty()) {
+            int node = q.front();
+            q.pop();
+            component.push_back(node);
+            unvisited.erase(node);
+
+            for (auto neighbor : clone_tree.successors(node)) {
+                if (unvisited.find(neighbor) != unvisited.end()) { // if not visited
+                    q.push(neighbor);
+                }
+            }
+
+            for (auto neighbor : clone_tree.predecessors(node)) {
+                if (unvisited.find(neighbor) != unvisited.end()) {
+                    q.push(neighbor);
+                }
+            }
+        }
+        components.push_back(component);
+    }
+
+    return components;
+}
+
+/*
+ * Given a clone tree $T$ and a frequency matrix $F$, this function,
+ * and a parameter $k$, this function computes clustering of the columns 
+ * of the frequency matrix into $1, \ldots, k$ clusters which is
+ * consistent with the clone tree $T$.
+ *
+ * The function is not guaranteed to return exactly $k$ clusters if
+ * optimal clustering is possible in with fewer clusters.
+ */
+std::pair<std::vector<std::pair<float, std::vector<int>>>, std::vector<float>> divisive_clustering(
+    loss_type loss,
+    const std::vector<std::vector<float>>& frequency_matrix,
+    digraph<int>& clone_tree,
+    size_t k
+) {
+    if (k == 0) return {{}, {}};
+
+    std::set<std::pair<float, std::vector<int>>> clustering;
+
+    // create initial component consisting of all columns 
+    std::vector<int> initial_component = clone_tree.nodes();
+    std::vector<int> initial_columns(initial_component.size());
+    for (size_t i = 0; i < initial_component.size(); ++i) {
+        initial_columns[i] = clone_tree[initial_component[i]].data;
+    }
+
+    float initial_obj = compute_component_score(loss, frequency_matrix, initial_columns);
+    clustering.insert({-initial_obj, initial_columns});
+
+    // in theory, can implement in O(mnk) time, this implementation is O(mn^2klog(n))
+    std::vector<float> obj_values(k, 0.000);
+    obj_values[0] = initial_obj;
+    while(clustering.size() < k) {
+        spdlog::info("Objective value with {} clusters: {}", clustering.size(), obj_values[clustering.size() - 1]);
+
+        auto [obj, component] = *clustering.begin();
+        if (component.size() == 1) break;
+
+        // TODO: a little slow, make component a set
+        std::vector<std::pair<int, int>> component_edges;
+        for (auto edge : clone_tree.edges()) {
+            if (std::find(component.begin(), component.end(), edge.first) != component.end() &&
+                std::find(component.begin(), component.end(), edge.second) != component.end()) {
+                component_edges.push_back(edge);
+            }
+        }
+
+        // TODO: can improve by not recomputing objective
+        // for each split. instead, walk through tree maintaining
+        // the current objective and the current split and update 
+        // it as we go in O(1) time using median/mean update formulas.
+        //
+        // this will allow us to find the best split in O(n) time. though
+        // arguably, this is simpler.
+        float min_obj1 = std::numeric_limits<float>::max();
+        float min_obj2 = std::numeric_limits<float>::max();
+        float min_obj  = std::numeric_limits<float>::max();
+        std::vector<int> sub_component1, sub_component2;
+        for (auto [u, v] : component_edges) {
+            clone_tree.remove_edge(u, v);
+            auto ccs = connected_components(clone_tree, component);
+            clone_tree.add_edge(u, v);
+
+            assert(ccs.size() == 2);
+
+            auto c1 = ccs[0];
+            auto c2 = ccs[1];
+
+            std::vector<int> c1_ids(c1.size());
+            std::vector<int> c2_ids(c2.size());
+            for (size_t i = 0; i < c1.size(); ++i) {
+                c1_ids[i] = clone_tree[c1[i]].data;
+            }
+            for (size_t i = 0; i < c2.size(); ++i) {
+                c2_ids[i] = clone_tree[c2[i]].data;
+            }
+
+            float obj1 = compute_component_score(loss, frequency_matrix, c1_ids);
+            float obj2 = compute_component_score(loss, frequency_matrix, c2_ids);
+
+            if (obj1 + obj2 < min_obj) {
+                min_obj = obj1 + obj2;
+                min_obj1 = obj1;
+                min_obj2 = obj2;
+                sub_component1 = c1;
+                sub_component2 = c2;
+            }
+        }
+
+        clustering.erase(clustering.begin());
+        clustering.insert({-min_obj1, sub_component1});
+        clustering.insert({-min_obj2, sub_component2});
+
+        // update list of objective values
+        float current_obj = 0;
+        for (auto [obj, component] : clustering) {
+            current_obj += obj;
+        }
+
+        obj_values[clustering.size() - 1] = -current_obj;
+    }
+
+    spdlog::info("Objective value with {} clusters: {}", clustering.size(), obj_values[clustering.size() - 1]);
+
+    std::vector<std::pair<float, std::vector<int>>> new_clustering;
+    for (auto [obj, component] : clustering) {
+        new_clustering.push_back({-obj, component});
+    }
+
+    return {new_clustering, obj_values};
+}
+
+void perform_cluster(const argparse::ArgumentParser &cluster) {
+    size_t num_clusters = cluster.get<size_t>("num_clusters");
+
+    auto [clone_tree_int, vertex_map] = parse_adjacency_list(cluster.get<std::string>("clone_tree"));
+    std::vector<std::vector<float>> frequency_matrix = parse_frequency_matrix(cluster.get<std::string>("frequency_matrix"));
+
+    loss_type loss = loss_type::L1;
+    if (cluster.get<std::string>("loss") == "L2") {
+        loss = loss_type::L2;
+    } else if (cluster.get<std::string>("loss") != "L1") {
+        throw std::runtime_error("Invalid loss function specified.");
+    }
+
+    auto start = std::chrono::high_resolution_clock::now();
+    spdlog::info("Performing divisive clustering...");
+    auto [clustering, obj_values] = divisive_clustering(
+        loss,
+        frequency_matrix, 
+        clone_tree_int, 
+        num_clusters
+    );
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+
+    std::ofstream adj_output(cluster.get<std::string>("output") + "_clustering.csv");
+    adj_output << "mutation,clone" << std::endl;
+    for (size_t i = 0; i < clustering.size(); ++i) {
+        for (auto vert : clustering[i].second) {
+            adj_output << clone_tree_int[vert].data << "," << i << std::endl;
+        }
+    }
+
+    json res;
+    res["time (ns)"] = duration.count();
+    res["time (s)"]  = duration.count() / 1e9;
+    res["num_clusters"] = clustering.size();
+    res["objective_values"] = obj_values;
+    res["loss_function"] = loss == loss_type::L1 ? "L1" : "L2";
+
+    std::ofstream json_output_stats(cluster.get<std::string>("output") + "_clustering_results.json");
+    json_output_stats << res.dump(4) << std::endl;
+}
+
 void perform_regression(const argparse::ArgumentParser &regress) {
     auto [clone_tree_int, vertex_map] = parse_adjacency_list(regress.get<std::string>("clone_tree"));
     std::vector<std::vector<float>> frequency_matrix = parse_frequency_matrix(regress.get<std::string>("frequency_matrix"));
@@ -505,7 +760,7 @@ void perform_search(const argparse::ArgumentParser &search) {
     }
 
     spdlog::info("Performing beam search to find tree(s)...");
-    auto [clone_tree, vmap] = beam_search(
+    auto [clone_tree, vmap] = forward_beam_search(
         frequency_matrix, 
         root, 
         clone_order, 
@@ -549,8 +804,14 @@ int main(int argc, char *argv[])
         "search"
     );
 
+    argparse::ArgumentParser cluster(
+        "cluster"
+    );
+
+
     regress.add_description("regresses a clone tree onto a frequency matrix.");
     search.add_description("searches for a clone tree that best fits a frequency matrix.");
+    cluster.add_description("clusters the mutations (columns) of a frequency matrix.");
 
     regress.add_argument("clone_tree")
            .help("adjacency list of the clone tree");
@@ -594,8 +855,29 @@ int main(int argc, char *argv[])
           .default_value(-1)
           .scan<'d', int>();
 
+    cluster.add_argument("clone_tree")
+           .help("adjacency list of the clone tree");
+
+    cluster.add_argument("frequency_matrix")
+           .help("TXT file containing the frequency matrix");
+
+    cluster.add_argument("-k", "--num_clusters")
+           .help("number of clusters")
+           .required()
+           .scan<'u', size_t>();
+
+    cluster.add_argument("-o", "--output")
+           .help("prefix of the output files")
+           .required();
+
+    cluster.add_argument("-l", "--loss")
+           .help("loss function to use for clustering")
+           .default_value("L1")
+           .choices("L1", "L2");
+
     program.add_subparser(search);
     program.add_subparser(regress);
+    program.add_subparser(cluster);
     
     try {
         program.parse_args(argc, argv);
@@ -606,6 +888,8 @@ int main(int argc, char *argv[])
             std::cerr << regress;
         } else if (program.is_subcommand_used(search)) {
             std::cerr << search;
+        } else if (program.is_subcommand_used(cluster)) {
+            std::cerr << cluster;
         } else {
             std::cerr << program;
         }
@@ -617,6 +901,8 @@ int main(int argc, char *argv[])
         perform_regression(regress);
     } else if (program.is_subcommand_used(search)) {
         perform_search(search);
+    } else if (program.is_subcommand_used(cluster)) {
+        perform_cluster(cluster);
     } else {
         std::cerr << program;
     }

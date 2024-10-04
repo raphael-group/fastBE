@@ -28,6 +28,11 @@ def parse_args():
     )
 
     parser.add_argument(
+        '--full', action='store_true',
+        help='Use full variant matrix instead of the reduced one.'
+    )
+
+    parser.add_argument(
         '-o', '--output', type=str, required=True,
         help='Prefix for output files.'
     )
@@ -57,11 +62,14 @@ if __name__ == "__main__":
     with open(f"{args.output}_mutations.ssm", 'w') as f:
         f.write(ssm_file_contents)
 
-    clones_to_mutations = []
-    for i in range(args.num_clones):
-        muts = mutation_clustering[mutation_clustering['clone'] == i]['mutation'].values.tolist()
-        muts = [f"s{j}" for j in muts]
-        clones_to_mutations.append(muts)
+    if args.full:
+        clones_to_mutations = [[f"s{j}"] for j in range(variant_matrix.shape[0])]
+    else:
+        clones_to_mutations = []
+        for i in range(args.num_clones):
+            muts = mutation_clustering[mutation_clustering['clone'] == i]['mutation'].values.tolist()
+            muts = [f"s{j}" for j in muts]
+            clones_to_mutations.append(muts)
 
     samples = [f"sample_{i}" for i in range(variant_matrix.shape[1])]
     with open(f"{args.output}_params.json", 'w') as f:
