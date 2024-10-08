@@ -203,7 +203,8 @@ This command will output the inferred clones at
 `examples/fastbe_clustering.csv` and a `examples/fastbe_results.json` file 
 containing important metadata. 
 
-> [!TIP] For selecting the number of mutation
+> [!TIP]
+> For selecting the number of mutation
 > clusters automatically, we recommend the usage of the Python
 > package [kneed](https://github.com/raphael-group/fastBE/tree/v1.0.1).
 
