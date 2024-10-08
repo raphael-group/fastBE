@@ -206,7 +206,7 @@ containing important metadata.
 > [!TIP]
 > For selecting the number of mutation
 > clusters automatically, we recommend the usage of the Python
-> package [kneed](https://github.com/raphael-group/fastBE/tree/v1.0.1).
+> package [kneed](https://kneed.readthedocs.io/).
 
 ### Benchmarks
 
