@@ -1,0 +1,20 @@
+package:
+  name: fastbe
+  version: "1.1.0"
+
+source:
+  path: ..
+
+build:
+  script: cmake ${CMAKE_ARGS} -DCMAKE_POLICY_VERSION_MINIMUM=3.5 . && make && mkdir -p ${PREFIX}/bin && mv src/fastbe ${PREFIX}/bin
+
+requirements:
+  build:
+    - {{ compiler('cxx') }}
+    - cmake
+    - make
+
+about:
+  home: https://github.com/schmidt73/fastbe
+  license: MIT
+  summary: "fastBE: ultrafast phylogenetic reconstruction from bulk DNA sequencing data"

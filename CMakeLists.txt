@@ -11,7 +11,7 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wno-unused-parameter")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -pg --coverage")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -ffast-math -march=native")
 
-project(fastbe VERSION 1.0)
+project(fastbe VERSION 1.1.0)
 
 add_subdirectory(src/)
 add_subdirectory(tests/)
